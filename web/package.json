@@ -1,5 +1,5 @@
 {
-  "name": "tilt-ui",
+  "name": "forge",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -91,5 +91,6 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "yarn@4.9.3"
+  "packageManager": "yarn@4.9.3",
+  "description": "The visual project manager for Tauri apps"
 }
