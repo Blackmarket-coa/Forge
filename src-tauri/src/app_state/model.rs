@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::backend::project_manager::{ProjectMeta, Workspace};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeState {
     pub projects: Vec<ProjectMeta>,
     pub workspaces: Vec<Workspace>,
