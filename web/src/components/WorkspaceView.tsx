@@ -7,6 +7,9 @@ import {
   ProjectMeta,
   Workspace,
 } from "../api/api"
+import { isFeatureAvailable } from "../lib/tier"
+import { useAppState } from "../providers/AppStateProvider"
+import LicenseGate from "./LicenseGate"
 
 export default function WorkspaceView({
   onSelectProject,
@@ -15,6 +18,7 @@ export default function WorkspaceView({
   onSelectProject: (project: ProjectMeta) => void
   onWorkspaceChange?: (workspaceId: string) => void
 }) {
+  const { tier } = useAppState()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [activeWorkspace, setActiveWorkspace] = useState<string>("all")
@@ -50,7 +54,10 @@ export default function WorkspaceView({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           style={{ fontWeight: activeWorkspace === "all" ? 700 : 400 }}
-          onClick={() => { setActiveWorkspace("all"); onWorkspaceChange?.("all") }}
+          onClick={() => {
+            setActiveWorkspace("all")
+            onWorkspaceChange?.("all")
+          }}
         >
           All Projects
         </button>
@@ -61,18 +68,31 @@ export default function WorkspaceView({
               fontWeight: activeWorkspace === ws.id ? 700 : 400,
               borderColor: ws.color || "#666",
             }}
-            onClick={() => { setActiveWorkspace(ws.id); onWorkspaceChange?.(ws.id) }}
+            onClick={() => {
+              setActiveWorkspace(ws.id)
+              onWorkspaceChange?.(ws.id)
+            }}
           >
             {ws.name}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <input placeholder="New workspace" value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
-        <button onClick={create}>New Workspace</button>
-      </div>
+      {isFeatureAvailable("workspaces", tier) ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input placeholder="New workspace" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
+          <button onClick={create}>New Workspace</button>
+        </div>
+      ) : (
+        <LicenseGate feature="workspaces" description="Workspace creation is a Forge Pro feature.">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="New workspace" disabled value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <input type="color" disabled value={newColor} onChange={(e) => setNewColor(e.target.value)} />
+            <button disabled onClick={create}>New Workspace</button>
+          </div>
+        </LicenseGate>
+      )}
 
       <div style={{ display: "grid", gap: 8 }}>
         {filtered.map((project) => (

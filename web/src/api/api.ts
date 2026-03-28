@@ -36,6 +36,15 @@ export interface BuildPreset {
   steps: BuildStep[]
 }
 
+
+export interface LicenseStatus {
+  tier: "free" | "pro" | "team"
+  valid: boolean
+  expires_at?: string | null
+  key_masked?: string | null
+  checked_at?: number | null
+}
+
 export interface BuildRecord {
   id: string
   project_id: string
@@ -139,4 +148,17 @@ export async function getBuildHistory(projectId?: string, limit: number = 10): P
 
 export async function getDeployStatus(workspaceId: string): Promise<any> {
   return invoke("get_deploy_status", { workspaceId })
+}
+
+
+export async function validateLicense(key: string): Promise<LicenseStatus> {
+  return invoke("validate_license", { key })
+}
+
+export async function getLicenseStatus(): Promise<LicenseStatus> {
+  return invoke("get_license_status")
+}
+
+export async function clearLicense(): Promise<LicenseStatus> {
+  return invoke("clear_license")
 }

@@ -1,11 +1,12 @@
 import React, { useState } from "react"
-import LandingScreen from "./components/LandingScreen"
-import ProjectView from "./components/ProjectView"
-import Settings from "./components/Settings"
-import { getProjects, ProjectMeta } from "./api/api"
 import ConfigEditor from "./components/ConfigEditor"
 import CreateProjectForm from "./components/CreateProjectForm"
 import DeployDashboard from "./components/DeployDashboard"
+import LandingScreen from "./components/LandingScreen"
+import LicenseGate from "./components/LicenseGate"
+import ProjectView from "./components/ProjectView"
+import Settings from "./components/Settings"
+import { getProjects, ProjectMeta } from "./api/api"
 
 type View = "landing" | "project" | "config" | "settings" | "create" | "deploy"
 
@@ -50,16 +51,21 @@ export default function App() {
         <CreateProjectForm onCreated={handleCreated} onCancel={() => setView("landing")} />
       )}
       {view === "deploy" && activeWorkspace !== "all" && (
-        <DeployDashboard
-          workspaceId={activeWorkspace}
-          onOpenProjectBuild={(projectId, platform) => {
-            void (async () => {
-              await openProjectById(projectId)
-              setView("project")
-              void platform
-            })()
-          }}
-        />
+        <LicenseGate
+          feature="deploy_dashboard"
+          description="Deploy dashboards and release readiness tracking are available on Forge Pro."
+        >
+          <DeployDashboard
+            workspaceId={activeWorkspace}
+            onOpenProjectBuild={(projectId, platform) => {
+              void (async () => {
+                await openProjectById(projectId)
+                setView("project")
+                void platform
+              })()
+            }}
+          />
+        </LicenseGate>
       )}
 
       {view === "project" && activeProject && (
