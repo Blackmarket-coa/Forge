@@ -8,9 +8,10 @@ import BuildOrchestrator from "./BuildOrchestrator"
 interface LandingScreenProps {
   onSelectProject: (project: ProjectMeta) => void
   onOpenCreateWizard: () => void
+  onWorkspaceActive?: (workspaceId: string) => void
 }
 
-export default function LandingScreen({ onSelectProject, onOpenCreateWizard }: LandingScreenProps) {
+export default function LandingScreen({ onSelectProject, onOpenCreateWizard, onWorkspaceActive }: LandingScreenProps) {
   const { projects, addProject, refreshProjects } = useAppState()
   const [activeWorkspace, setActiveWorkspace] = useState<string>("all")
   const [projectCount, setProjectCount] = useState(0)
@@ -64,7 +65,7 @@ export default function LandingScreen({ onSelectProject, onOpenCreateWizard }: L
           <div style={{ display: "grid", gap: 16 }}>
             <WorkspaceView
               onSelectProject={onSelectProject}
-              onWorkspaceChange={(workspaceId) => setActiveWorkspace(workspaceId)}
+              onWorkspaceChange={(workspaceId) => { setActiveWorkspace(workspaceId); onWorkspaceActive?.(workspaceId) }}
             />
             {activeWorkspace !== "all" && <BuildOrchestrator workspaceId={activeWorkspace} />}
           </div>

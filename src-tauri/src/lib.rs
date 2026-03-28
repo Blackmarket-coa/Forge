@@ -28,5 +28,6 @@ pub fn register_commands(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
         backend::ipc::get_build_presets,
         backend::ipc::run_build_preset,
         backend::ipc::get_build_history,
+        backend::ipc::get_deploy_status,
     ])
 }

@@ -136,3 +136,7 @@ export async function runBuildPreset(presetId: string): Promise<any> {
 export async function getBuildHistory(projectId?: string, limit: number = 10): Promise<BuildRecord[]> {
   return invoke("get_build_history", { projectId, limit })
 }
+
+export async function getDeployStatus(workspaceId: string): Promise<any> {
+  return invoke("get_deploy_status", { workspaceId })
+}

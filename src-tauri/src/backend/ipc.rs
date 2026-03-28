@@ -492,6 +492,168 @@ pub async fn get_build_history(
 }
 
 #[tauri::command]
+pub async fn get_deploy_status(workspace_id: String) -> Result<serde_json::Value, String> {
+    let state = load_state().map_err(|e| e.to_string())?;
+    let projects: Vec<ProjectMeta> = state
+        .projects
+        .into_iter()
+        .filter(|p| p.workspace_id.as_deref() == Some(workspace_id.as_str()))
+        .collect();
+
+    let tauri_cli_installed = Command::new("cargo")
+        .args(["tauri", "--version"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    let mut blockers: Vec<serde_json::Value> = Vec::new();
+    if !tauri_cli_installed {
+        blockers.push(json!({
+            "message": "cargo tauri CLI not installed",
+            "affected_project": null,
+            "severity": "high",
+            "fix_hint": "Install Tauri CLI via `cargo install tauri-cli`"
+        }));
+    }
+
+    let xcode_exists = Command::new("xcodebuild").arg("-version").output().is_ok();
+    let ndk_exists = Command::new("ndk-build").arg("--version").output().is_ok();
+
+    let platforms = vec!["macOS", "Linux", "Windows", "iOS", "Android"];
+    let mut matrix = Vec::new();
+    let mut checklist = Vec::new();
+    let mut built_count = 0usize;
+    let mut total_count = 0usize;
+
+    for project in &projects {
+        let project_path = PathBuf::from(&project.path);
+        let tauri_conf_exists = project_path
+            .join("src-tauri")
+            .join("tauri.conf.json")
+            .exists()
+            || project_path.join("tauri.conf.json").exists();
+
+        if !tauri_conf_exists {
+            blockers.push(json!({
+                "message": "tauri.conf.json missing",
+                "affected_project": project.name,
+                "severity": "high",
+                "fix_hint": "Open Config Editor and create/repair tauri.conf.json"
+            }));
+        }
+
+        let status_json = detect_status_impl(&project_path).map_err(|e| e.to_string())?;
+        let tauri_initialized = status_json.has_tauri_conf;
+        let config_issues = if tauri_conf_exists {
+            let cfg = config_manager::read_config(&project_path).map_err(|e| e.to_string())?;
+            config_manager::validate_config(&project_path, &cfg).map_err(|e| e.to_string())?
+        } else {
+            vec!["tauri.conf.json missing".to_string()]
+        };
+
+        let (git_branch, git_dirty) =
+            get_git_info_impl(&project_path).map_err(|e| e.to_string())?;
+        let artifacts = collect_artifacts_internal(&project.path.to_string_lossy())?;
+
+        let mut platform_status = serde_json::Map::new();
+        for platform in &platforms {
+            let targeted = project
+                .platforms
+                .iter()
+                .any(|p| p.eq_ignore_ascii_case(platform))
+                || matches!(*platform, "macOS" | "Linux" | "Windows");
+
+            if !targeted {
+                platform_status.insert(platform.to_string(), json!("not_started"));
+                continue;
+            }
+
+            total_count += 1;
+
+            let ext_match = artifacts.iter().any(|a| {
+                let fmt = a.get("format").and_then(|v| v.as_str()).unwrap_or("");
+                match *platform {
+                    "macOS" => fmt == "dmg" || fmt == "app",
+                    "Linux" => fmt == "AppImage" || fmt == "deb" || fmt == "rpm",
+                    "Windows" => fmt == "msi" || fmt == "exe" || fmt == "nsis",
+                    "iOS" => fmt == "ipa",
+                    "Android" => fmt == "apk" || fmt == "aab",
+                    _ => false,
+                }
+            });
+
+            let status = if ext_match {
+                built_count += 1;
+                "built"
+            } else if !tauri_initialized || !config_issues.is_empty() {
+                "not_started"
+            } else {
+                "configured"
+            };
+
+            platform_status.insert(platform.to_string(), json!(status));
+        }
+
+        checklist.push(json!({
+            "project": project.name,
+            "tauri_initialized": tauri_initialized,
+            "git_branch": git_branch,
+            "git_dirty": git_dirty,
+            "config_ok": config_issues.is_empty(),
+            "config_issues": config_issues,
+        }));
+
+        matrix.push(json!({
+            "project_id": project.id,
+            "project_name": project.name,
+            "statuses": platform_status,
+        }));
+
+        if project
+            .platforms
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case("iOS"))
+            && !xcode_exists
+        {
+            blockers.push(json!({
+                "message": "Xcode not found",
+                "affected_project": project.name,
+                "severity": "high",
+                "fix_hint": "Install Xcode and command line tools"
+            }));
+        }
+
+        if project
+            .platforms
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case("Android"))
+            && !ndk_exists
+        {
+            blockers.push(json!({
+                "message": "Android NDK not found",
+                "affected_project": project.name,
+                "severity": "high",
+                "fix_hint": "Install Android NDK and set ANDROID_NDK_HOME"
+            }));
+        }
+    }
+
+    let overall_progress = if total_count == 0 {
+        0.0
+    } else {
+        (built_count as f64 / total_count as f64) * 100.0
+    };
+
+    Ok(json!({
+        "workspace_id": workspace_id,
+        "overall_progress": overall_progress,
+        "matrix": matrix,
+        "checklist": checklist,
+        "blockers": blockers,
+    }))
+}
+
+#[tauri::command]
 pub async fn check_environment() -> Result<serde_json::Value, String> {
     fn check_command(cmd: &str, args: &[&str]) -> serde_json::Value {
         match Command::new(cmd).args(args).output() {
