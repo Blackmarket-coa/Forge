@@ -4,11 +4,12 @@ import { ProjectMeta, runDev } from "../api/api"
 interface ProjectViewProps {
   project: ProjectMeta
   onBack: () => void
+  onOpenConfig: () => void
 }
 
 const labelStyle: React.CSSProperties = { fontWeight: 600, minWidth: 160 }
 
-export default function ProjectView({ project, onBack }: ProjectViewProps) {
+export default function ProjectView({ project, onBack, onOpenConfig }: ProjectViewProps) {
   const [log, setLog] = useState("Forge log output will appear here.\n")
 
   const handleDev = async () => {
@@ -46,7 +47,7 @@ export default function ProjectView({ project, onBack }: ProjectViewProps) {
       <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
         <button onClick={handleDev}>Dev</button>
         <button onClick={() => window.alert("Build action coming soon")}>Build</button>
-        <button onClick={() => window.alert("Config view coming soon")}>Config</button>
+        <button onClick={onOpenConfig}>Config</button>
       </div>
 
       <pre style={{ background: "#111", color: "#ddd", padding: 12, minHeight: 220 }}>{log}</pre>

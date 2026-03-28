@@ -5,6 +5,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::app_state::store::{load_state, save_state};
+use crate::backend::config_manager;
 use crate::backend::project_manager::{
     detect_tauri_status as detect_status_impl, get_git_info as get_git_info_impl,
     register_project as register_project_impl, scan_directory as scan_dir_impl, ProjectMeta,
@@ -74,41 +75,20 @@ pub async fn scan_directory(path: String) -> Result<Vec<ProjectMeta>, String> {
 
 #[tauri::command]
 pub async fn read_config(project_path: String) -> Result<serde_json::Value, String> {
-    let root = PathBuf::from(project_path);
-    let nested = root.join("src-tauri").join("tauri.conf.json");
-    let flat = root.join("tauri.conf.json");
-    let config_path = if nested.exists() { nested } else { flat };
-
-    if !config_path.exists() {
-        return Ok(json!({ "exists": false, "config": null }));
-    }
-
-    let content = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
-    let config = serde_json::from_str::<serde_json::Value>(&content).map_err(|e| e.to_string())?;
-    Ok(json!({ "exists": true, "config": config }))
+    config_manager::read_config(&PathBuf::from(project_path)).map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn write_config(project_path: String, config: serde_json::Value) -> Result<(), String> {
-    let root = PathBuf::from(project_path);
-    let nested = root.join("src-tauri").join("tauri.conf.json");
-    let flat = root.join("tauri.conf.json");
-    let config_path = if nested.exists() { nested } else { flat };
-
-    let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-    std::fs::write(config_path, content).map_err(|e| e.to_string())
+    config_manager::write_config(&PathBuf::from(project_path), &config).map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn validate_config(config: serde_json::Value) -> Result<Vec<String>, String> {
-    let mut issues = Vec::new();
-    if config.get("productName").is_none() {
-        issues.push("Missing productName".to_string());
-    }
-    if config.get("identifier").is_none() {
-        issues.push("Missing identifier".to_string());
-    }
-    Ok(issues)
+pub async fn validate_config(
+    project_path: String,
+    config: serde_json::Value,
+) -> Result<Vec<String>, String> {
+    config_manager::validate_config(&PathBuf::from(project_path), &config).map_err(Into::into)
 }
 
 #[tauri::command]

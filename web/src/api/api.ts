@@ -41,8 +41,8 @@ export async function readConfig(projectPath: string): Promise<any> {
 export async function writeConfig(projectPath: string, config: any): Promise<void> {
   return invoke("write_config", { projectPath, config })
 }
-export async function validateConfig(config: any): Promise<string[]> {
-  return invoke("validate_config", { config })
+export async function validateConfig(projectPath: string, config: any): Promise<string[]> {
+  return invoke("validate_config", { projectPath, config })
 }
 export async function runDev(projectPath: string): Promise<number> {
   return invoke("run_dev", { projectPath })
