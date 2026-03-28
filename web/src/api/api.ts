@@ -47,7 +47,7 @@ export async function validateConfig(projectPath: string, config: any): Promise<
 export async function runDev(projectPath: string): Promise<number> {
   return invoke("run_dev", { projectPath })
 }
-export async function runBuild(projectPath: string, targets: string[]): Promise<string> {
+export async function runBuild(projectPath: string, targets: string[]): Promise<any> {
   return invoke("run_build", { projectPath, targets })
 }
 export async function killProcess(processId: string): Promise<void> {

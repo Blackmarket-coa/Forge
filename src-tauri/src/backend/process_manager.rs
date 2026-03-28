@@ -11,7 +11,12 @@ use crate::backend::errors::ForgeError;
 
 #[derive(Default)]
 pub struct ProcessManager {
-    processes: HashMap<String, Arc<Mutex<Child>>>,
+    processes: HashMap<String, ManagedProcess>,
+}
+
+struct ManagedProcess {
+    child: Arc<Mutex<Child>>,
+    pid: u32,
 }
 
 #[derive(Serialize, Clone)]
@@ -60,8 +65,13 @@ impl ProcessManager {
         let stderr = child.stderr.take();
 
         let child_arc = Arc::new(Mutex::new(child));
-        self.processes
-            .insert(id.to_string(), Arc::clone(&child_arc));
+        self.processes.insert(
+            id.to_string(),
+            ManagedProcess {
+                child: Arc::clone(&child_arc),
+                pid,
+            },
+        );
 
         if let Some(stdout) = stdout {
             let id_out = id.to_string();
@@ -71,10 +81,7 @@ impl ProcessManager {
                 for line in reader.lines().map_while(Result::ok) {
                     let _ = app_out.emit(
                         "process-stdout",
-                        ProcessLinePayload {
-                            id: id_out.clone(),
-                            line,
-                        },
+                        serde_json::json!({ "id": id_out, "line": line }),
                     );
                 }
             });
@@ -88,10 +95,7 @@ impl ProcessManager {
                 for line in reader.lines().map_while(Result::ok) {
                     let _ = app_err.emit(
                         "process-stderr",
-                        ProcessLinePayload {
-                            id: id_err.clone(),
-                            line,
-                        },
+                        serde_json::json!({ "id": id_err, "line": line }),
                     );
                 }
             });
@@ -116,13 +120,32 @@ impl ProcessManager {
         Ok(pid)
     }
 
+    pub fn wait_for_exit(&self, id: &str) -> Result<i32, ForgeError> {
+        let managed = self
+            .processes
+            .get(id)
+            .ok_or_else(|| ForgeError::ProjectNotFound(id.to_string()))?;
+
+        let mut lock = managed
+            .child
+            .lock()
+            .map_err(|_| ForgeError::ProcessError("failed to lock process for wait".to_string()))?;
+
+        let status = lock
+            .wait()
+            .map_err(|e| ForgeError::ProcessError(format!("failed to wait process: {e}")))?;
+
+        Ok(status.code().unwrap_or(-1))
+    }
+
     pub fn kill(&mut self, id: &str) -> Result<(), ForgeError> {
-        let child = self
+        let managed = self
             .processes
             .remove(id)
             .ok_or_else(|| ForgeError::ProjectNotFound(id.to_string()))?;
 
-        let mut lock = child
+        let mut lock = managed
+            .child
             .lock()
             .map_err(|_| ForgeError::ProcessError("failed to lock process for kill".to_string()))?;
 
@@ -134,5 +157,9 @@ impl ProcessManager {
 
     pub fn is_running(&self, id: &str) -> bool {
         self.processes.contains_key(id)
+    }
+
+    pub fn pid(&self, id: &str) -> Option<u32> {
+        self.processes.get(id).map(|p| p.pid)
     }
 }

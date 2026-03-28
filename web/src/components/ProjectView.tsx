@@ -1,5 +1,6 @@
-import React, { useState } from "react"
-import { ProjectMeta, runDev } from "../api/api"
+import React, { useMemo, useState } from "react"
+import { collectArtifacts, killProcess, ProjectMeta, runBuild, runDev } from "../api/api"
+import Terminal from "./Terminal"
 
 interface ProjectViewProps {
   project: ProjectMeta
@@ -11,10 +12,43 @@ const labelStyle: React.CSSProperties = { fontWeight: 600, minWidth: 160 }
 
 export default function ProjectView({ project, onBack, onOpenConfig }: ProjectViewProps) {
   const [log, setLog] = useState("Forge log output will appear here.\n")
+  const [showTerminal, setShowTerminal] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [processId, setProcessId] = useState("")
+  const [targets, setTargets] = useState<string[]>([])
+  const [buildResult, setBuildResult] = useState<any>(null)
+  const [artifacts, setArtifacts] = useState<any[]>([])
+
+  const processIdPrefix = useMemo(() => {
+    if (processId) return processId
+    return `${project.path}`
+  }, [processId, project.path])
 
   const handleDev = async () => {
     const pid = await runDev(project.path)
+    setProcessId(`dev:${project.path}`)
+    setShowTerminal(true)
+    setIsRunning(true)
     setLog((prev) => `${prev}Started dev process PID: ${pid}\n`)
+  }
+
+  const handleStartBuild = async () => {
+    setShowTerminal(true)
+    const result = await runBuild(project.path, targets)
+    setBuildResult(result)
+    setArtifacts(result?.artifacts || (await collectArtifacts(project.path)))
+  }
+
+  const handleStop = async () => {
+    if (!processId) return
+    await killProcess(processId)
+    setIsRunning(false)
+  }
+
+  const toggleTarget = (target: string, checked: boolean) => {
+    setTargets((prev) =>
+      checked ? (prev.includes(target) ? prev : [...prev, target]) : prev.filter((t) => t !== target)
+    )
   }
 
   return (
@@ -44,13 +78,56 @@ export default function ProjectView({ project, onBack, onOpenConfig }: ProjectVi
         {(project.platforms || []).length === 0 && <span>No platforms detected</span>}
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
         <button onClick={handleDev}>Dev</button>
-        <button onClick={() => window.alert("Build action coming soon")}>Build</button>
+
+        <details>
+          <summary>Build</summary>
+          <div style={{ display: "grid", gap: 4, padding: 8 }}>
+            {(["dmg", "appimage", "deb", "nsis", "msi"] as const).map((target) => (
+              <label key={target}>
+                <input
+                  type="checkbox"
+                  checked={targets.includes(target)}
+                  onChange={(e) => toggleTarget(target, e.target.checked)}
+                />
+                {target}
+              </label>
+            ))}
+            <button onClick={handleStartBuild} disabled={targets.length === 0}>Start Build</button>
+          </div>
+        </details>
+
         <button onClick={onOpenConfig}>Config</button>
+        {isRunning && <button onClick={handleStop}>Stop</button>}
       </div>
 
-      <pre style={{ background: "#111", color: "#ddd", padding: 12, minHeight: 220 }}>{log}</pre>
+      {buildResult && (
+        <div style={{ marginBottom: 12 }}>
+          <strong>Build status:</strong> {buildResult.status} ({buildResult.duration_secs?.toFixed?.(2)}s)
+        </div>
+      )}
+
+      {artifacts.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <h3>Artifacts</h3>
+          <ul>
+            {artifacts.map((artifact, idx) => (
+              <li key={idx}>
+                {artifact.path} — {artifact.size_bytes} bytes 
+                <a href="#" onClick={(e) => e.preventDefault()}>Open Folder</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <details open={showTerminal} onToggle={(e) => setShowTerminal((e.target as HTMLDetailsElement).open)}>
+        <summary>Terminal Panel</summary>
+        <Terminal processIdPrefix={processIdPrefix} />
+      </details>
+
+      <pre style={{ background: "#111", color: "#ddd", padding: 12, minHeight: 120 }}>{log}</pre>
     </div>
   )
 }
