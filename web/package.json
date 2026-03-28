@@ -40,7 +40,8 @@
     "check": "prettier --check \"src/**/*.ts*\" && tsc -p . && eslint 'src/**/*.ts*'",
     "storybook": "start-storybook -p 9009 -s public",
     "build-storybook": "build-storybook -s public",
-    "dev": "react-scripts start"
+    "dev": "react-scripts start",
+    "tauri": "tauri"
   },
   "eslintConfig": {
     "extends": "react-app"

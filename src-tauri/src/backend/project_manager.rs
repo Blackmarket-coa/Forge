@@ -1,8 +1,10 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use walkdir::WalkDir;
 
 use crate::backend::errors::ForgeError;
 
@@ -31,77 +33,115 @@ pub struct Workspace {
     pub color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TauriStatus {
     pub has_tauri_conf: bool,
-    pub has_tauri_dep: bool,
+    pub tauri_conf_path: Option<PathBuf>,
+    pub product_name: Option<String>,
+    pub identifier: Option<String>,
+    pub version: Option<String>,
+    pub tauri_version: Option<String>,
+    pub frontend_framework: Option<String>,
     pub status: String,
 }
 
-#[derive(Default)]
-pub struct ProjectManager {
-    projects: HashMap<String, ProjectMeta>,
-}
-
-impl ProjectManager {
-    pub fn new() -> Self {
-        Self {
-            projects: HashMap::new(),
-        }
-    }
-
-    pub fn detect_tauri_status(&self, path: &Path) -> Result<TauriStatus, ForgeError> {
-        detect_tauri_status(path)
-    }
-
-    pub fn scan_directory(&self, path: &Path) -> Result<Vec<ProjectMeta>, ForgeError> {
-        scan_directory(path)
-    }
-
-    pub fn register_project(&mut self, path: &Path) -> Result<ProjectMeta, ForgeError> {
-        let status = detect_tauri_status(path)?;
-        let metadata = extract_project_meta(path, status)?;
-        self.projects.insert(metadata.id.clone(), metadata.clone());
-        Ok(metadata)
-    }
-
-    pub fn get_projects(&self, workspace_id: Option<String>) -> Vec<ProjectMeta> {
-        let mut projects: Vec<ProjectMeta> = self.projects.values().cloned().collect();
-        if let Some(id) = workspace_id {
-            projects.retain(|p| p.workspace_id.as_deref() == Some(id.as_str()));
-        }
-        projects
-    }
-
-    pub fn get_git_info(&self, path: &Path) -> Result<(Option<String>, bool), ForgeError> {
-        get_git_info(path)
-    }
-}
-
 pub fn detect_tauri_status(path: &Path) -> Result<TauriStatus, ForgeError> {
-    let tauri_conf = path.join("src-tauri").join("tauri.conf.json");
-    let cargo_toml = path.join("src-tauri").join("Cargo.toml");
+    let nested_conf = path.join("src-tauri").join("tauri.conf.json");
+    let flat_conf = path.join("tauri.conf.json");
 
-    let has_tauri_conf = tauri_conf.exists();
-    let has_tauri_dep = if cargo_toml.exists() {
-        let content = fs::read_to_string(cargo_toml)?;
-        content.contains("tauri")
+    let tauri_conf_path = if nested_conf.exists() {
+        Some(nested_conf)
+    } else if flat_conf.exists() {
+        Some(flat_conf)
     } else {
-        false
+        None
     };
 
-    let status = match (has_tauri_conf, has_tauri_dep) {
+    let mut product_name = None;
+    let mut identifier = None;
+    let mut version = None;
+
+    if let Some(conf_path) = &tauri_conf_path {
+        let content = fs::read_to_string(conf_path)?;
+        let value: Value = serde_json::from_str(&content)?;
+
+        product_name = value
+            .get("productName")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        identifier = value
+            .get("identifier")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        version = value
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+    }
+
+    let tauri_dir = if path.join("src-tauri").exists() {
+        path.join("src-tauri")
+    } else {
+        path.to_path_buf()
+    };
+
+    let tauri_version = detect_tauri_dependency_version(&tauri_dir)?;
+    let frontend_framework = detect_frontend_framework(path)?;
+
+    let status = match (tauri_conf_path.is_some(), tauri_version.is_some()) {
         (true, true) => "ready",
-        (false, false) => "needs_init",
-        _ => "needs_config",
+        (true, false) => "needs_config",
+        (false, _) => "error",
     }
     .to_string();
 
     Ok(TauriStatus {
-        has_tauri_conf,
-        has_tauri_dep,
+        has_tauri_conf: tauri_conf_path.is_some(),
+        tauri_conf_path,
+        product_name,
+        identifier,
+        version,
+        tauri_version,
+        frontend_framework,
         status,
     })
+}
+
+pub fn register_project(path: &Path, id: String) -> Result<ProjectMeta, ForgeError> {
+    let status = detect_tauri_status(path)?;
+    let (git_branch, git_dirty) = get_git_info(path)?;
+    project_meta_from_status(path, id, status, git_branch, git_dirty)
+}
+
+pub fn get_git_info(path: &Path) -> Result<(Option<String>, bool), ForgeError> {
+    let branch_output = Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(path)
+        .output();
+
+    let branch = match branch_output {
+        Ok(out) if out.status.success() => {
+            let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if b.is_empty() {
+                None
+            } else {
+                Some(b)
+            }
+        }
+        _ => None,
+    };
+
+    let dirty_output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        .output();
+
+    let git_dirty = match dirty_output {
+        Ok(out) if out.status.success() => !String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+        _ => false,
+    };
+
+    Ok((branch, git_dirty))
 }
 
 pub fn scan_directory(path: &Path) -> Result<Vec<ProjectMeta>, ForgeError> {
@@ -109,84 +149,135 @@ pub fn scan_directory(path: &Path) -> Result<Vec<ProjectMeta>, ForgeError> {
         return Err(ForgeError::ProjectNotFound(path.display().to_string()));
     }
 
-    let mut projects = Vec::new();
-    walk_for_tauri(path, &mut projects)?;
-    Ok(projects)
-}
+    let mut found = Vec::new();
 
-fn walk_for_tauri(path: &Path, projects: &mut Vec<ProjectMeta>) -> Result<(), ForgeError> {
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let entry_path = entry.path();
-
-        if entry_path.is_dir() {
-            let possible = entry_path.join("src-tauri").join("tauri.conf.json");
-            if possible.exists() {
-                let status = detect_tauri_status(&entry_path)?;
-                projects.push(extract_project_meta(&entry_path, status)?);
-            }
-            walk_for_tauri(&entry_path, projects)?;
+    for entry in WalkDir::new(path)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if !entry.file_type().is_file() {
+            continue;
         }
+
+        if entry.file_name() != "tauri.conf.json" {
+            continue;
+        }
+
+        let conf_parent = match entry.path().parent() {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let root = if conf_parent.ends_with("src-tauri") {
+            conf_parent.parent().unwrap_or(conf_parent)
+        } else {
+            conf_parent
+        };
+
+        let status = detect_tauri_status(root)?;
+        let (git_branch, git_dirty) = get_git_info(root)?;
+        let id = root
+            .canonicalize()
+            .unwrap_or_else(|_| root.to_path_buf())
+            .to_string_lossy()
+            .to_string();
+
+        let meta = project_meta_from_status(root, id, status, git_branch, git_dirty)?;
+        found.push(meta);
     }
 
-    Ok(())
+    Ok(found)
 }
 
-pub fn get_git_info(path: &Path) -> Result<(Option<String>, bool), ForgeError> {
-    let git_head = path.join(".git").join("HEAD");
-    if !git_head.exists() {
-        return Ok((None, false));
-    }
-
-    let content = fs::read_to_string(git_head)?;
-    let branch = content
-        .trim()
-        .strip_prefix("ref: refs/heads/")
-        .map(str::to_string);
-
-    let dirty = false;
-    Ok((branch, dirty))
-}
-
-fn extract_project_meta(path: &Path, status: TauriStatus) -> Result<ProjectMeta, ForgeError> {
-    let project_id = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf())
-        .to_string_lossy()
-        .to_string();
-
-    let name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unnamed-project")
-        .to_string();
-
-    let conf_path = path.join("src-tauri").join("tauri.conf.json");
-    let identifier = if conf_path.exists() {
-        let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(conf_path)?)?;
-        value
-            .get("identifier")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    } else {
-        None
-    };
-
-    let (git_branch, git_dirty) = get_git_info(path)?;
+fn project_meta_from_status(
+    path: &Path,
+    id: String,
+    status: TauriStatus,
+    git_branch: Option<String>,
+    git_dirty: bool,
+) -> Result<ProjectMeta, ForgeError> {
+    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let name = status.product_name.clone().unwrap_or_else(|| {
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unnamed-project")
+            .to_string()
+    });
 
     Ok(ProjectMeta {
-        id: project_id,
+        id,
         name,
-        path: path.to_path_buf(),
+        path: canonical_path,
         workspace_id: None,
-        tauri_version: None,
-        identifier,
-        frontend_framework: None,
-        platforms: vec![],
+        tauri_version: status.tauri_version,
+        identifier: status.identifier,
+        frontend_framework: status.frontend_framework,
+        platforms: vec!["desktop".to_string()],
         git_branch,
         git_dirty,
         status: status.status,
         tags: vec![],
         role: None,
     })
+}
+
+fn detect_tauri_dependency_version(tauri_dir: &Path) -> Result<Option<String>, ForgeError> {
+    let cargo_toml = tauri_dir.join("Cargo.toml");
+    if !cargo_toml.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(cargo_toml)?;
+    let parsed: toml::Value = toml::from_str(&content)
+        .map_err(|e| ForgeError::ConfigInvalid(format!("invalid Cargo.toml: {e}")))?;
+
+    let dep = parsed
+        .get("dependencies")
+        .and_then(|v| v.get("tauri"))
+        .cloned();
+
+    let version = match dep {
+        Some(toml::Value::String(v)) => Some(v),
+        Some(toml::Value::Table(t)) => t
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        _ => None,
+    };
+
+    Ok(version)
+}
+
+fn detect_frontend_framework(project_root: &Path) -> Result<Option<String>, ForgeError> {
+    let package_json = project_root.join("package.json");
+    if !package_json.exists() {
+        return Ok(Some("vanilla".to_string()));
+    }
+
+    let content = fs::read_to_string(package_json)?;
+    let value: Value = serde_json::from_str(&content)?;
+
+    let has_dep = |name: &str| {
+        value
+            .get("dependencies")
+            .and_then(|d| d.get(name))
+            .is_some()
+            || value
+                .get("devDependencies")
+                .and_then(|d| d.get(name))
+                .is_some()
+    };
+
+    let framework = if has_dep("react") {
+        "react"
+    } else if has_dep("svelte") {
+        "svelte"
+    } else if has_dep("vue") {
+        "vue"
+    } else {
+        "vanilla"
+    };
+
+    Ok(Some(framework.to_string()))
 }
