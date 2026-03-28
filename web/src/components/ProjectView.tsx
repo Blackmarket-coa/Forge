@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react"
-import { collectArtifacts, killProcess, ProjectMeta, runBuild, runDev } from "../api/api"
+import React, { useEffect, useMemo, useState } from "react"
+import { collectArtifacts, getBuildHistory, killProcess, ProjectMeta, runBuild, runDev } from "../api/api"
 import Terminal from "./Terminal"
 
 interface ProjectViewProps {
@@ -18,6 +18,17 @@ export default function ProjectView({ project, onBack, onOpenConfig }: ProjectVi
   const [targets, setTargets] = useState<string[]>([])
   const [buildResult, setBuildResult] = useState<any>(null)
   const [artifacts, setArtifacts] = useState<any[]>([])
+  const [history, setHistory] = useState<any[]>([])
+
+
+  const refreshHistory = async () => {
+    const rows = await getBuildHistory(project.id, 10)
+    setHistory(rows)
+  }
+
+  useEffect(() => {
+    void refreshHistory()
+  }, [project.id])
 
   const processIdPrefix = useMemo(() => {
     if (processId) return processId
@@ -37,6 +48,7 @@ export default function ProjectView({ project, onBack, onOpenConfig }: ProjectVi
     const result = await runBuild(project.path, targets)
     setBuildResult(result)
     setArtifacts(result?.artifacts || (await collectArtifacts(project.path)))
+    await refreshHistory()
   }
 
   const handleStop = async () => {
@@ -114,13 +126,34 @@ export default function ProjectView({ project, onBack, onOpenConfig }: ProjectVi
           <ul>
             {artifacts.map((artifact, idx) => (
               <li key={idx}>
-                {artifact.path} — {artifact.size_bytes} bytes 
+                {artifact.path} — {artifact.size_bytes} bytes
                 <a href="#" onClick={(e) => e.preventDefault()}>Open Folder</a>
               </li>
             ))}
           </ul>
         </div>
       )}
+
+      <h3>Build History (last 10)</h3>
+      <table style={{ width: "100%", marginBottom: 12 }}>
+        <thead>
+          <tr>
+            <th>Date</th><th>Targets</th><th>Status</th><th>Duration</th><th>Artifacts</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map((row) => (
+            <tr key={row.id}>
+              <td>{row.started_at}</td>
+              <td>{(row.targets || []).join(",")}</td>
+              <td style={{ color: row.status === "success" ? "#16a34a" : "#dc2626" }}>{row.status}</td>
+              <td>{row.duration_secs}s</td>
+              <td>{(row.artifacts || []).length}</td>
+              <td><button onClick={() => setTargets(row.targets || [])}>Re-run</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <details open={showTerminal} onToggle={(e) => setShowTerminal((e.target as HTMLDetailsElement).open)}>
         <summary>Terminal Panel</summary>

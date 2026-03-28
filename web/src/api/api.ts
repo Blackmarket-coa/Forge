@@ -23,6 +23,30 @@ export interface Workspace {
   color?: string
 }
 
+export interface BuildStep {
+  project_id: string
+  targets: string[]
+  parallel_with_next: boolean
+}
+
+export interface BuildPreset {
+  id: string
+  name: string
+  workspace_id: string
+  steps: BuildStep[]
+}
+
+export interface BuildRecord {
+  id: string
+  project_id: string
+  targets: string[]
+  status: string
+  started_at: string
+  duration_secs: number
+  artifacts: any[]
+  log_path: string
+}
+
 export async function registerProject(path: string): Promise<ProjectMeta> {
   return invoke("register_project", { path })
 }
@@ -71,4 +95,44 @@ export async function createProject(
 
 export async function initTauri(projectPath: string): Promise<any> {
   return invoke("init_tauri", { projectPath })
+}
+
+export async function createWorkspace(name: string): Promise<Workspace> {
+  return invoke("create_workspace", { name })
+}
+
+export async function getWorkspaces(): Promise<Workspace[]> {
+  return invoke("get_workspaces")
+}
+
+export async function updateWorkspace(id: string, name?: string, color?: string): Promise<Workspace> {
+  return invoke("update_workspace", { id, name, color })
+}
+
+export async function deleteWorkspace(id: string): Promise<void> {
+  return invoke("delete_workspace", { id })
+}
+
+export async function addProjectToWorkspace(workspaceId: string, projectId: string): Promise<void> {
+  return invoke("add_project_to_workspace", { workspaceId, projectId })
+}
+
+export async function removeProjectFromWorkspace(workspaceId: string, projectId: string): Promise<void> {
+  return invoke("remove_project_from_workspace", { workspaceId, projectId })
+}
+
+export async function saveBuildPreset(preset: BuildPreset): Promise<void> {
+  return invoke("save_build_preset", { preset })
+}
+
+export async function getBuildPresets(workspaceId: string): Promise<BuildPreset[]> {
+  return invoke("get_build_presets", { workspaceId })
+}
+
+export async function runBuildPreset(presetId: string): Promise<any> {
+  return invoke("run_build_preset", { presetId })
+}
+
+export async function getBuildHistory(projectId?: string, limit: number = 10): Promise<BuildRecord[]> {
+  return invoke("get_build_history", { projectId, limit })
 }

@@ -2,24 +2,52 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 use tauri::AppHandle;
 use uuid::Uuid;
 
-use crate::app_state::store::{load_state, save_state};
+use crate::app_state::model::{Artifact, BuildPreset, BuildRecord, BuildStep};
+use crate::app_state::store::{load_state, save_state, state_path};
 use crate::backend::config_manager;
 use crate::backend::process_manager::ProcessManager;
 use crate::backend::project_manager::{
     detect_tauri_status as detect_status_impl, get_git_info as get_git_info_impl,
     register_project as register_project_impl, scan_directory as scan_dir_impl, ProjectMeta,
+    Workspace,
 };
 
 static PROCESS_MANAGER: OnceLock<Mutex<ProcessManager>> = OnceLock::new();
 
 fn process_manager() -> &'static Mutex<ProcessManager> {
     PROCESS_MANAGER.get_or_init(|| Mutex::new(ProcessManager::new()))
+}
+
+fn build_history_path() -> Result<PathBuf, String> {
+    let base = state_path().map_err(|e| e.to_string())?;
+    let dir = base
+        .parent()
+        .ok_or_else(|| "invalid state file path".to_string())?;
+    Ok(dir.join("build_history.json"))
+}
+
+fn load_history() -> Result<Vec<BuildRecord>, String> {
+    let path = build_history_path()?;
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+fn save_history(records: &[BuildRecord]) -> Result<(), String> {
+    let path = build_history_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let content = serde_json::to_string_pretty(records).map_err(|e| e.to_string())?;
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -130,50 +158,7 @@ pub async fn run_build(
     targets: Vec<String>,
     app_handle: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    let started = Instant::now();
-    let project_dir = PathBuf::from(&project_path);
-    let mut status = "success".to_string();
-
-    for target in &targets {
-        let process_id = format!("build:{}:{}", project_path, target);
-        {
-            let mut manager = process_manager()
-                .lock()
-                .map_err(|_| "failed to lock process manager".to_string())?;
-            manager
-                .spawn_command(
-                    &process_id,
-                    &project_dir,
-                    "cargo",
-                    &["tauri", "build", "--bundles", target],
-                    &app_handle,
-                )
-                .map_err(|e| e.to_string())?;
-        }
-
-        let exit_code = {
-            let manager = process_manager()
-                .lock()
-                .map_err(|_| "failed to lock process manager".to_string())?;
-            manager
-                .wait_for_exit(&process_id)
-                .map_err(|e| e.to_string())?
-        };
-
-        if exit_code != 0 {
-            status = "failed".to_string();
-            break;
-        }
-    }
-
-    let artifacts = collect_artifacts(project_path.clone()).await?;
-    let duration_secs = started.elapsed().as_secs_f64();
-
-    Ok(json!({
-        "status": status,
-        "duration_secs": duration_secs,
-        "artifacts": artifacts
-    }))
+    run_build_internal(&project_path, &targets, &app_handle, None)
 }
 
 #[tauri::command]
@@ -312,6 +297,201 @@ pub async fn init_tauri(
 }
 
 #[tauri::command]
+pub async fn create_workspace(name: String) -> Result<Workspace, String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+    let workspace = Workspace {
+        id: Uuid::new_v4().to_string(),
+        name,
+        project_ids: vec![],
+        color: None,
+    };
+    state.workspaces.push(workspace.clone());
+    save_state(&state).map_err(|e| e.to_string())?;
+    Ok(workspace)
+}
+
+#[tauri::command]
+pub async fn get_workspaces() -> Result<Vec<Workspace>, String> {
+    let state = load_state().map_err(|e| e.to_string())?;
+    Ok(state.workspaces)
+}
+
+#[tauri::command]
+pub async fn update_workspace(
+    id: String,
+    name: Option<String>,
+    color: Option<String>,
+) -> Result<Workspace, String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+    let ws = state
+        .workspaces
+        .iter_mut()
+        .find(|w| w.id == id)
+        .ok_or_else(|| "workspace not found".to_string())?;
+
+    if let Some(n) = name {
+        ws.name = n;
+    }
+    if color.is_some() {
+        ws.color = color;
+    }
+
+    let updated = ws.clone();
+    save_state(&state).map_err(|e| e.to_string())?;
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn delete_workspace(id: String) -> Result<(), String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+    state.workspaces.retain(|w| w.id != id);
+    for p in &mut state.projects {
+        if p.workspace_id.as_deref() == Some(id.as_str()) {
+            p.workspace_id = None;
+        }
+    }
+    save_state(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn add_project_to_workspace(
+    workspace_id: String,
+    project_id: String,
+) -> Result<(), String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+
+    let ws = state
+        .workspaces
+        .iter_mut()
+        .find(|w| w.id == workspace_id)
+        .ok_or_else(|| "workspace not found".to_string())?;
+    if !ws.project_ids.contains(&project_id) {
+        ws.project_ids.push(project_id.clone());
+    }
+
+    if let Some(project) = state.projects.iter_mut().find(|p| p.id == project_id) {
+        project.workspace_id = Some(workspace_id.clone());
+    }
+
+    save_state(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn remove_project_from_workspace(
+    workspace_id: String,
+    project_id: String,
+) -> Result<(), String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+
+    if let Some(ws) = state.workspaces.iter_mut().find(|w| w.id == workspace_id) {
+        ws.project_ids.retain(|id| id != &project_id);
+    }
+
+    if let Some(project) = state.projects.iter_mut().find(|p| p.id == project_id) {
+        if project.workspace_id.as_deref() == Some(workspace_id.as_str()) {
+            project.workspace_id = None;
+        }
+    }
+
+    save_state(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_build_preset(mut preset: BuildPreset) -> Result<(), String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+    if preset.id.is_empty() {
+        preset.id = Uuid::new_v4().to_string();
+    }
+
+    if let Some(existing) = state.build_presets.iter_mut().find(|p| p.id == preset.id) {
+        *existing = preset;
+    } else {
+        state.build_presets.push(preset);
+    }
+
+    save_state(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_build_presets(workspace_id: String) -> Result<Vec<BuildPreset>, String> {
+    let state = load_state().map_err(|e| e.to_string())?;
+    Ok(state
+        .build_presets
+        .into_iter()
+        .filter(|p| p.workspace_id == workspace_id)
+        .collect())
+}
+
+#[tauri::command]
+pub async fn run_build_preset(
+    preset_id: String,
+    app_handle: AppHandle,
+) -> Result<serde_json::Value, String> {
+    let state = load_state().map_err(|e| e.to_string())?;
+    let preset = state
+        .build_presets
+        .iter()
+        .find(|p| p.id == preset_id)
+        .cloned()
+        .ok_or_else(|| "preset not found".to_string())?;
+
+    let mut timeline = Vec::new();
+    let mut i = 0;
+    while i < preset.steps.len() {
+        let step = preset.steps[i].clone();
+        let project = state
+            .projects
+            .iter()
+            .find(|p| p.id == step.project_id)
+            .ok_or_else(|| format!("project not found for step: {}", step.project_id))?;
+
+        let result = run_build_internal(
+            &project.path.to_string_lossy(),
+            &step.targets,
+            &app_handle,
+            Some(step.project_id.clone()),
+        )?;
+        timeline.push(result);
+
+        if step.parallel_with_next && i + 1 < preset.steps.len() {
+            let next = preset.steps[i + 1].clone();
+            let project_next = state
+                .projects
+                .iter()
+                .find(|p| p.id == next.project_id)
+                .ok_or_else(|| format!("project not found for step: {}", next.project_id))?;
+
+            let result_next = run_build_internal(
+                &project_next.path.to_string_lossy(),
+                &next.targets,
+                &app_handle,
+                Some(next.project_id.clone()),
+            )?;
+            timeline.push(result_next);
+            i += 1;
+        }
+
+        i += 1;
+    }
+
+    Ok(json!({"preset_id": preset.id, "timeline": timeline}))
+}
+
+#[tauri::command]
+pub async fn get_build_history(
+    project_id: Option<String>,
+    limit: u32,
+) -> Result<Vec<BuildRecord>, String> {
+    let mut records = load_history()?;
+    if let Some(pid) = project_id {
+        records.retain(|r| r.project_id == pid);
+    }
+    records.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    records.truncate(limit as usize);
+    Ok(records)
+}
+
+#[tauri::command]
 pub async fn check_environment() -> Result<serde_json::Value, String> {
     fn check_command(cmd: &str, args: &[&str]) -> serde_json::Value {
         match Command::new(cmd).args(args).output() {
@@ -352,6 +532,10 @@ pub async fn check_environment() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn collect_artifacts(project_path: String) -> Result<Vec<serde_json::Value>, String> {
+    collect_artifacts_internal(&project_path)
+}
+
+fn collect_artifacts_internal(project_path: &str) -> Result<Vec<serde_json::Value>, String> {
     let bundle_dir = PathBuf::from(project_path)
         .join("src-tauri")
         .join("target")
@@ -378,7 +562,7 @@ pub async fn collect_artifacts(project_path: String) -> Result<Vec<serde_json::V
             let created_at = metadata
                 .created()
                 .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
                 .unwrap_or_default();
 
@@ -394,6 +578,98 @@ pub async fn collect_artifacts(project_path: String) -> Result<Vec<serde_json::V
     Ok(artifacts)
 }
 
+fn run_build_internal(
+    project_path: &str,
+    targets: &[String],
+    app_handle: &AppHandle,
+    project_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let started = Instant::now();
+    let started_at = chrono_like_now();
+    let project_dir = PathBuf::from(project_path);
+    let mut status = "success".to_string();
+
+    for target in targets {
+        let process_id = format!("build:{}:{}", project_path, target);
+        {
+            let mut manager = process_manager()
+                .lock()
+                .map_err(|_| "failed to lock process manager".to_string())?;
+            manager
+                .spawn_command(
+                    &process_id,
+                    &project_dir,
+                    "cargo",
+                    &["tauri", "build", "--bundles", target],
+                    app_handle,
+                )
+                .map_err(|e| e.to_string())?;
+        }
+
+        let exit_code = {
+            let manager = process_manager()
+                .lock()
+                .map_err(|_| "failed to lock process manager".to_string())?;
+            manager
+                .wait_for_exit(&process_id)
+                .map_err(|e| e.to_string())?
+        };
+
+        if exit_code != 0 {
+            status = "failed".to_string();
+            break;
+        }
+    }
+
+    let artifacts_json = collect_artifacts_internal(project_path)?;
+    let duration_secs = started.elapsed().as_secs();
+
+    let artifacts: Vec<Artifact> = artifacts_json
+        .iter()
+        .map(|v| Artifact {
+            path: v
+                .get("path")
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            size_bytes: v
+                .get("size_bytes")
+                .and_then(|x| x.as_u64())
+                .unwrap_or_default(),
+            format: v
+                .get("format")
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            created_at: v
+                .get("created_at")
+                .and_then(|x| x.as_u64())
+                .unwrap_or_default(),
+        })
+        .collect();
+
+    let record = BuildRecord {
+        id: Uuid::new_v4().to_string(),
+        project_id: project_id.unwrap_or_else(|| project_path.to_string()),
+        targets: targets.to_vec(),
+        status: status.clone(),
+        started_at,
+        duration_secs,
+        artifacts,
+        log_path: "".to_string(),
+    };
+
+    let mut history = load_history()?;
+    history.push(record);
+    save_history(&history)?;
+
+    Ok(json!({
+        "status": status,
+        "duration_secs": duration_secs,
+        "artifacts": artifacts_json
+    }))
+}
+
 fn detect_package_manager(project_dir: &Path) -> &'static str {
     if project_dir.join("pnpm-lock.yaml").exists() {
         "pnpm"
@@ -404,4 +680,12 @@ fn detect_package_manager(project_dir: &Path) -> &'static str {
     } else {
         "npm"
     }
+}
+
+fn chrono_like_now() -> String {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    secs.to_string()
 }
