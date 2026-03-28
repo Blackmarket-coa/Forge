@@ -24,7 +24,9 @@
     "react-table": "^7.7.0",
     "react-timeago": "^4.4.0",
     "regex-escape": "^3.4.10",
-    "styled-components": "^5.3.5"
+    "styled-components": "^5.3.5",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -37,7 +39,8 @@
     "prettier": "prettier --write \"src/**/*.ts*\"",
     "check": "prettier --check \"src/**/*.ts*\" && tsc -p . && eslint 'src/**/*.ts*'",
     "storybook": "start-storybook -p 9009 -s public",
-    "build-storybook": "build-storybook -s public"
+    "build-storybook": "build-storybook -s public",
+    "dev": "react-scripts start"
   },
   "eslintConfig": {
     "extends": "react-app"
