@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::app_state::model::{Artifact, BuildPreset, BuildRecord, BuildStep};
 use crate::app_state::store::{load_state, save_state, state_path};
 use crate::backend::config_manager;
+use crate::backend::license;
 use crate::backend::process_manager::ProcessManager;
 use crate::backend::project_manager::{
     detect_tauri_status as detect_status_impl, get_git_info as get_git_info_impl,
@@ -48,6 +49,33 @@ fn save_history(records: &[BuildRecord]) -> Result<(), String> {
     }
     let content = serde_json::to_string_pretty(records).map_err(|e| e.to_string())?;
     fs::write(path, content).map_err(|e| e.to_string())
+}
+
+fn sync_tier_to_state(tier: &str) -> Result<(), String> {
+    let mut state = load_state().map_err(|e| e.to_string())?;
+    state.set_tier(tier);
+    save_state(&state).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn validate_license(key: String) -> Result<license::LicenseStatus, String> {
+    let status = license::validate_and_store_license(key).await?;
+    sync_tier_to_state(&status.tier)?;
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn get_license_status() -> Result<license::LicenseStatus, String> {
+    let status = license::get_license_status()?;
+    sync_tier_to_state(&status.tier)?;
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn clear_license() -> Result<license::LicenseStatus, String> {
+    let status = license::clear_license()?;
+    sync_tier_to_state(&status.tier)?;
+    Ok(status)
 }
 
 #[tauri::command]

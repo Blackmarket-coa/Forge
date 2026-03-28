@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { collectArtifacts, getBuildHistory, killProcess, ProjectMeta, runBuild, runDev } from "../api/api"
 import Terminal from "./Terminal"
+import LicenseGate from "./LicenseGate"
 
 interface ProjectViewProps {
   project: ProjectMeta
@@ -134,26 +135,31 @@ export default function ProjectView({ project, onBack, onOpenConfig }: ProjectVi
         </div>
       )}
 
-      <h3>Build History (last 10)</h3>
-      <table style={{ width: "100%", marginBottom: 12 }}>
-        <thead>
-          <tr>
-            <th>Date</th><th>Targets</th><th>Status</th><th>Duration</th><th>Artifacts</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((row) => (
-            <tr key={row.id}>
-              <td>{row.started_at}</td>
-              <td>{(row.targets || []).join(",")}</td>
-              <td style={{ color: row.status === "success" ? "#16a34a" : "#dc2626" }}>{row.status}</td>
-              <td>{row.duration_secs}s</td>
-              <td>{(row.artifacts || []).length}</td>
-              <td><button onClick={() => setTargets(row.targets || [])}>Re-run</button></td>
+      <LicenseGate
+        feature="build_history"
+        description="Build history and rerun tracking are available on Forge Pro."
+      >
+        <h3>Build History (last 10)</h3>
+        <table style={{ width: "100%", marginBottom: 12 }}>
+          <thead>
+            <tr>
+              <th>Date</th><th>Targets</th><th>Status</th><th>Duration</th><th>Artifacts</th><th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {history.map((row) => (
+              <tr key={row.id}>
+                <td>{row.started_at}</td>
+                <td>{(row.targets || []).join(",")}</td>
+                <td style={{ color: row.status === "success" ? "#16a34a" : "#dc2626" }}>{row.status}</td>
+                <td>{row.duration_secs}s</td>
+                <td>{(row.artifacts || []).length}</td>
+                <td><button onClick={() => setTargets(row.targets || [])}>Re-run</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </LicenseGate>
 
       <details open={showTerminal} onToggle={(e) => setShowTerminal((e.target as HTMLDetailsElement).open)}>
         <summary>Terminal Panel</summary>

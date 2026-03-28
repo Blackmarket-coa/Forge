@@ -9,6 +9,7 @@ pub struct ForgeState {
     pub build_presets: Vec<BuildPreset>,
     pub build_history: Vec<BuildRecord>,
     pub preferences: ForgePreferences,
+    pub tier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +62,25 @@ impl Default for ForgePreferences {
             terminal_font_size: 13,
             default_package_manager: "npm".to_string(),
             auto_check_updates: true,
+        }
+    }
+}
+
+impl ForgeState {
+    pub fn set_tier(&mut self, tier: &str) {
+        self.tier = tier.to_string();
+    }
+}
+
+impl Default for ForgeState {
+    fn default() -> Self {
+        Self {
+            projects: vec![],
+            workspaces: vec![],
+            build_presets: vec![],
+            build_history: vec![],
+            preferences: ForgePreferences::default(),
+            tier: "free".to_string(),
         }
     }
 }

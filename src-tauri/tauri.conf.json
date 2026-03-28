@@ -18,7 +18,15 @@
     ]
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/forge-dev/forge/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
