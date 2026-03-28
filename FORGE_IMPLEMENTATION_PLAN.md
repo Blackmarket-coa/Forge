@@ -8,7 +8,7 @@ To execute the Forge roadmap successfully, use this as the **execution order + r
 
 - [ ] Verify the repo root contains `src-tauri/`, `src/`, and `package.json` for the desktop app.
 - [ ] Verify `src-tauri/tauri.conf.json` exists and app runs with `npm run tauri dev`.
-- [ ] Confirm fork origin (`binarygeotech/tilt-orchestrator`) and preserve MIT attribution.
+- [ ] Confirm fork origin (`binarygeotech/forge`) and preserve MIT attribution.
 - [ ] Create branch naming convention for rollout (e.g. `forge/phase-0-rebrand`, `forge/phase-1-backend-shell`).
 
 If any item fails, stop and switch to the correct repo before continuing.
@@ -26,9 +26,9 @@ Goal: rename Tilt identity to Forge without behavior changes.
 - Remove stale screenshots.
 
 ### String replacement sweep
-- `tilt-orchestrator` → `forge`
-- `Tilt Orchestrator` → `Forge`
-- `tilt_orchestrator` → `forge`
+- `forge` → `forge`
+- `Forge` → `Forge`
+- `forge` → `forge`
 
 ### Exit criteria
 - [ ] `npm install` passes.

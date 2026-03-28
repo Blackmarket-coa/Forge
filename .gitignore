@@ -69,3 +69,6 @@ integration/.kube
 
 # Built binary at repo root
 /tilt
+
+# root-level dependencies
+/node_modules
