@@ -59,3 +59,16 @@ export async function checkEnvironment(): Promise<any> {
 export async function collectArtifacts(projectPath: string): Promise<any[]> {
   return invoke("collect_artifacts", { projectPath })
 }
+
+export async function createProject(
+  path: string,
+  name: string,
+  template: string,
+  packageManager: string
+): Promise<ProjectMeta> {
+  return invoke("create_project", { path, name, template, packageManager })
+}
+
+export async function initTauri(projectPath: string): Promise<any> {
+  return invoke("init_tauri", { projectPath })
+}

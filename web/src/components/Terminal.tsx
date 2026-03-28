@@ -36,7 +36,7 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
     const unsubs: Array<() => void> = []
 
     const addListener = async (event: string, handler: (payload: any) => void) => {
-      const unlisten = await listen(event, (e) => {
+      const unlisten = await listen(event, (e: any) => {
         const payload: any = e.payload || {}
         if (!processIdPrefix || String(payload.id || "").startsWith(processIdPrefix)) {
           handler(payload)

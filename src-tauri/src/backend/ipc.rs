@@ -185,6 +185,133 @@ pub async fn kill_process(process_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn create_project(
+    path: String,
+    name: String,
+    template: String,
+    package_manager: String,
+    app_handle: AppHandle,
+) -> Result<ProjectMeta, String> {
+    let parent_dir = PathBuf::from(path);
+    let process_id = format!("create:{}", name);
+
+    let (cmd, args): (&str, Vec<String>) = match package_manager.as_str() {
+        "pnpm" => (
+            "pnpm",
+            vec![
+                "create".into(),
+                "tauri-app".into(),
+                name.clone(),
+                "--template".into(),
+                template.clone(),
+                "--manager".into(),
+                "pnpm".into(),
+            ],
+        ),
+        "yarn" => (
+            "yarn",
+            vec![
+                "create".into(),
+                "tauri-app".into(),
+                name.clone(),
+                "--template".into(),
+                template.clone(),
+                "--manager".into(),
+                "yarn".into(),
+            ],
+        ),
+        "bun" => (
+            "bun",
+            vec![
+                "create".into(),
+                "tauri-app".into(),
+                name.clone(),
+                "--template".into(),
+                template.clone(),
+                "--manager".into(),
+                "bun".into(),
+            ],
+        ),
+        _ => (
+            "npm",
+            vec![
+                "create".into(),
+                "tauri-app@latest".into(),
+                name.clone(),
+                "--".into(),
+                "--template".into(),
+                template.clone(),
+                "--manager".into(),
+                "npm".into(),
+            ],
+        ),
+    };
+
+    {
+        let mut manager = process_manager()
+            .lock()
+            .map_err(|_| "failed to lock process manager".to_string())?;
+        let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
+        manager
+            .spawn_command(&process_id, &parent_dir, cmd, &args_ref, &app_handle)
+            .map_err(|e| e.to_string())?;
+    }
+
+    {
+        let manager = process_manager()
+            .lock()
+            .map_err(|_| "failed to lock process manager".to_string())?;
+        let exit = manager
+            .wait_for_exit(&process_id)
+            .map_err(|e| e.to_string())?;
+        if exit != 0 {
+            return Err(format!("create project failed with exit code {exit}"));
+        }
+    }
+
+    let new_project_dir = parent_dir.join(&name);
+    register_project(new_project_dir.to_string_lossy().to_string()).await
+}
+
+#[tauri::command]
+pub async fn init_tauri(
+    project_path: String,
+    app_handle: AppHandle,
+) -> Result<serde_json::Value, String> {
+    let project_dir = PathBuf::from(&project_path);
+    let process_id = format!("init:{}", project_path);
+
+    {
+        let mut manager = process_manager()
+            .lock()
+            .map_err(|_| "failed to lock process manager".to_string())?;
+        manager
+            .spawn_command(
+                &process_id,
+                &project_dir,
+                "cargo",
+                &["tauri", "init"],
+                &app_handle,
+            )
+            .map_err(|e| e.to_string())?;
+    }
+
+    {
+        let manager = process_manager()
+            .lock()
+            .map_err(|_| "failed to lock process manager".to_string())?;
+        let exit = manager
+            .wait_for_exit(&process_id)
+            .map_err(|e| e.to_string())?;
+        if exit != 0 {
+            return Err(format!("cargo tauri init failed with exit code {exit}"));
+        }
+    }
+
+    detect_tauri_status(project_path).await
+}
+
+#[tauri::command]
 pub async fn check_environment() -> Result<serde_json::Value, String> {
     fn check_command(cmd: &str, args: &[&str]) -> serde_json::Value {
         match Command::new(cmd).args(args).output() {

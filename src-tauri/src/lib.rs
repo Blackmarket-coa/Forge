@@ -16,5 +16,7 @@ pub fn register_commands(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
         backend::ipc::kill_process,
         backend::ipc::check_environment,
         backend::ipc::collect_artifacts,
+        backend::ipc::create_project,
+        backend::ipc::init_tauri,
     ])
 }

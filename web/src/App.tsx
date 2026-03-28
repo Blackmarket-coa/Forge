@@ -4,14 +4,20 @@ import ProjectView from "./components/ProjectView"
 import Settings from "./components/Settings"
 import { ProjectMeta } from "./api/api"
 import ConfigEditor from "./components/ConfigEditor"
+import CreateProjectForm from "./components/CreateProjectForm"
 
-type View = "landing" | "project" | "config" | "settings"
+type View = "landing" | "project" | "config" | "settings" | "create"
 
 export default function App() {
   const [activeProject, setActiveProject] = useState<ProjectMeta | null>(null)
   const [view, setView] = useState<View>("landing")
 
   const openProject = (project: ProjectMeta) => {
+    setActiveProject(project)
+    setView("project")
+  }
+
+  const handleCreated = (project: ProjectMeta) => {
     setActiveProject(project)
     setView("project")
   }
@@ -23,8 +29,13 @@ export default function App() {
         <button onClick={() => setView("settings")}>Settings</button>
       </header>
 
-      {view === "landing" && <LandingScreen onSelectProject={openProject} />}
+      {view === "landing" && (
+        <LandingScreen onSelectProject={openProject} onOpenCreateWizard={() => setView("create")} />
+      )}
       {view === "settings" && <Settings />}
+      {view === "create" && (
+        <CreateProjectForm onCreated={handleCreated} onCancel={() => setView("landing")} />
+      )}
 
       {view === "project" && activeProject && (
         <ProjectView
