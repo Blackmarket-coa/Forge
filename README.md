@@ -1,89 +1,65 @@
-# Tilt
+# Forge
 
-<img src="assets/logo-wordmark.png" width="250">
+Forge is a desktop-first visual project manager for **Tauri** applications.
+It helps you discover projects, manage workspaces, run builds, inspect artifacts,
+and manage release readiness from one interface.
 
-[![Build Status](https://circleci.com/gh/tilt-dev/tilt/tree/master.svg?style=shield)](https://circleci.com/gh/tilt-dev/tilt)
-[![GoDoc](https://godoc.org/github.com/tilt-dev/tilt?status.svg)](https://pkg.go.dev/github.com/tilt-dev/tilt)
+## Current status
 
-Kubernetes for Prod, Tilt for Dev
+Forge is under active development. The repository currently includes:
 
-Modern apps are made of too many services. They're everywhere and in constant
-communication.
+- A **Tauri v2 backend** (`src-tauri/`) with IPC commands for project discovery,
+  config read/write/validation, process execution, build orchestration, deploy
+  readiness checks, and local state persistence.
+- A **React frontend** (`web/src/`) for project browsing, workspace views,
+  build orchestration, deploy dashboard, config editing, and settings.
+- Commercial tier plumbing (Free/Pro/Team) with local license cache and Keygen
+  validation hooks.
+- A tag-driven GitHub Actions release workflow for macOS, Linux, and Windows.
 
-[Tilt](https://tilt.dev) powers microservice development and makes sure they behave!
-Run `tilt up` to work in a complete dev environment configured for your team.
+## Repository layout
 
-Tilt automates all the steps from a code change to a new process: watching
-files, building container images, and bringing your environment
-up-to-date. Think `docker build && kubectl apply` or `docker-compose up`.
+- `src-tauri/` — Rust backend (Tauri app, IPC handlers, state, license checks)
+- `web/` — React UI and frontend API wrappers
+- `.github/workflows/release.yml` — draft release pipeline on `v*` tags
 
-## Watch: Tilt in Two Minutes
+## Local development
 
-[![screencast](assets/tilt-video.png)](https://www.youtube.com/watch?v=FSMc3kQgd5Y)
+### Prerequisites
 
-## Install Tilt
+- Rust toolchain (stable)
+- Node.js 20+
+- Tauri dependencies for your platform
 
-Installing the `tilt` binary is a one-step command.
-
-### macOS/Linux
+### Run frontend only
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
+cd web
+npm install
+npm run dev
 ```
 
-### Windows
+### Run Tauri app
 
-```powershell
-iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.ps1'))
+```bash
+cd web
+npm install
+npm run tauri dev
 ```
 
-For specific package managers (Homebrew, Scoop, Conda, asdf), see the
-[Installation Guide](https://docs.tilt.dev/install.html).
+## License/tier behavior (current)
 
-## Run Tilt
+- Free tier limits project count and gates selected premium features.
+- Pro/Team unlock gated feature surfaces.
+- License status is persisted in `~/.forge/license.json` and app state in
+  `~/.forge/forge.json`.
 
-**New to Tilt?** Our tutorial will [get you started](https://docs.tilt.dev/tutorial.html).
+## Releases
 
-**Configuring a Service?** We have best practice guides for 
-[HTML](https://docs.tilt.dev/example_static_html.html), 
-[NodeJS](https://docs.tilt.dev/example_nodejs.html), 
-[Python](https://docs.tilt.dev/example_python.html), 
-[Go](https://docs.tilt.dev/example_go.html),
-[Java](https://docs.tilt.dev/example_java.html),
-and [C#](https://docs.tilt.dev/example_csharp.html).
+Create and push a semantic tag like `v0.1.0` to trigger the cross-platform
+release workflow. Releases are created as **drafts** by default.
 
-**Optimizing a Tiltfile?** Search for the function you need in our 
-[complete API reference](https://docs.tilt.dev/api.html).
+## Notes
 
-## Community & Contributions
-
-**Questions:** Join [the Kubernetes slack](http://slack.k8s.io) and
- find us in the [#tilt](https://kubernetes.slack.com/messages/CESBL84MV/)
- channel. Or [file an issue](https://github.com/tilt-dev/tilt/issues). For code snippets of Tiltfile functionality shared by the Tilt community, check out [Tilt Extensions](https://github.com/tilt-dev/tilt-extensions). 
-
-**Contribute:** Check out our [guidelines](CONTRIBUTING.md) to contribute to Tilt's source code. To extend the capabilities of Tilt via new Tiltfile functionality, read more about [Extensions](https://docs.tilt.dev/extensions.html).
-
-**Help us make Tilt even better:** Tilt sends anonymized usage data, so we can
-improve Tilt on every platform. Details in ["What does Tilt
-send?"](http://docs.tilt.dev/telemetry_faq.html).
-
-We expect everyone in our community (users, contributors, followers, and employees alike) to abide by our [**Code of Conduct**](CODE_OF_CONDUCT.md).
-
-## Reporting security issues
-
-The maintainers take security seriously. If you discover a security issue,
-please bring it to their attention right away!
-
-Please **DO NOT** file a public issue, instead send your report privately to
-[security@docker.com](mailto:security@docker.com).
-
-Security reports are greatly appreciated and we will publicly thank you for it.
-We also like to send gifts—if you're into Docker schwag, make sure to let
-us know. We currently do not offer a paid security bounty program, but are not
-ruling it out in the future.
-
-## License
-
-Copyright 2022 Docker, Inc.
-
-Licensed under [the Apache License, Version 2.0](LICENSE)
+This README reflects the current scaffold and will evolve as Forge moves from
+baseline implementation to production-ready behavior.
