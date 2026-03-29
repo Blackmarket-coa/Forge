@@ -159,7 +159,7 @@ pub async fn validate_config(
 }
 
 #[tauri::command]
-pub async fn run_dev(project_path: String, app_handle: AppHandle) -> Result<u32, String> {
+pub async fn run_dev(project_path: String, app_handle: AppHandle) -> Result<String, String> {
     let project_dir = PathBuf::from(&project_path);
     let process_id = format!("dev:{}", project_path);
 
@@ -177,7 +177,9 @@ pub async fn run_dev(project_path: String, app_handle: AppHandle) -> Result<u32,
             &["tauri", "dev"],
             &app_handle,
         )
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(process_id)
 }
 
 #[tauri::command]

@@ -473,8 +473,8 @@ export default function ProjectDetail() {
     if (!project) return
     setTerminalLines([])
     try {
-      const pid = await runDev(project.path)
-      setActiveProcessId(String(pid))
+      const processId = await runDev(project.path)
+      setActiveProcessId(processId)
     } catch (err) {
       setTerminalLines([{ text: String(err), isStderr: true }])
     }

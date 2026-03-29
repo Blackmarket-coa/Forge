@@ -49,7 +49,7 @@ export const validateConfig = (projectPath: string, config: unknown) =>
 
 // Process management
 export const runDev = (projectPath: string) =>
-  invoke<number>('run_dev', { project_path: projectPath })
+  invoke<string>('run_dev', { project_path: projectPath })
 
 export const runBuild = (projectPath: string, targets: string[]) =>
   invoke<BuildResult>('run_build', { project_path: projectPath, targets })
@@ -124,7 +124,18 @@ export const checkEnvironment = () =>
   invoke<EnvironmentStatus>('check_environment')
 
 // Process output streaming
-export const listenProcessOutput = (
+// The backend emits two separate events: 'process-stdout' and 'process-stderr',
+// each with payload { id: string, line: string }. We normalise them here.
+export async function listenProcessOutput(
   cb: (event: ProcessOutputEvent) => void
-) =>
-  listen<ProcessOutputEvent>('forge://process-output', (e) => cb(e.payload))
+): Promise<() => void> {
+  const unlistenStdout = await listen<{ id: string; line: string }>(
+    'process-stdout',
+    (e) => cb({ process_id: e.payload.id, data: e.payload.line, is_stderr: false })
+  )
+  const unlistenStderr = await listen<{ id: string; line: string }>(
+    'process-stderr',
+    (e) => cb({ process_id: e.payload.id, data: e.payload.line, is_stderr: true })
+  )
+  return () => { unlistenStdout(); unlistenStderr() }
+}
