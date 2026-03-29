@@ -26,7 +26,7 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/forge-dev/forge/releases/latest/download/latest.json"
+        "https://github.com/blackmarket-coa/forge/releases/latest/download/latest.json"
       ]
     }
   }

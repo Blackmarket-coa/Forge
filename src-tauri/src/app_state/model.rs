@@ -2,14 +2,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::backend::project_manager::{ProjectMeta, Workspace};
 
+/// Increment this constant whenever the ForgeState schema changes in a
+/// backwards-incompatible way.  The loader uses it to detect stale state
+/// files and apply any necessary migrations before deserialising.
+pub const STATE_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeState {
+    /// Schema version written when the file was last saved.  Used by the
+    /// loader to decide whether migrations are needed.  Defaults to 1.
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub projects: Vec<ProjectMeta>,
     pub workspaces: Vec<Workspace>,
     pub build_presets: Vec<BuildPreset>,
     pub build_history: Vec<BuildRecord>,
     pub preferences: ForgePreferences,
     pub tier: String,
+}
+
+fn default_schema_version() -> u32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +88,7 @@ impl ForgeState {
 impl Default for ForgeState {
     fn default() -> Self {
         Self {
+            schema_version: STATE_SCHEMA_VERSION,
             projects: vec![],
             workspaces: vec![],
             build_presets: vec![],
