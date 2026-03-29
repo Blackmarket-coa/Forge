@@ -207,23 +207,23 @@ async fn validate_key_remote(key: &str) -> Result<CachedValidation, String> {
 
 pub async fn bootstrap_license_check() -> Result<LicenseStatus, String> {
     let file = read_license_file()?;
-    let Some(key) = file.key.as_deref() else {
+    let Some(key) = file.key.clone() else {
         return Ok(free_status());
     };
 
     if let Some(cache) = file.cached.as_ref() {
         let age = now_unix().saturating_sub(cache.checked_at);
         if cache.valid && age < OFFLINE_GRACE_SECS {
-            return Ok(status_from_cache(cache, Some(key)));
+            return Ok(status_from_cache(cache, Some(key.as_str())));
         }
     }
 
-    let cache = validate_key_remote(key).await?;
+    let cache = validate_key_remote(&key).await?;
     let mut next = file;
     next.cached = Some(cache.clone());
     write_license_file(&next)?;
 
-    Ok(status_from_cache(&cache, Some(key)))
+    Ok(status_from_cache(&cache, Some(key.as_str())))
 }
 
 pub fn get_license_status() -> Result<LicenseStatus, String> {

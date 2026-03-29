@@ -72,3 +72,6 @@ integration/.kube
 
 # root-level dependencies
 /node_modules
+
+# Forge frontend build output
+dist/
