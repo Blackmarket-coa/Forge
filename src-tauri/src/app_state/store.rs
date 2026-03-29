@@ -69,3 +69,72 @@ pub fn save_state(state: &ForgeState) -> Result<(), ForgeError> {
     info!("state saved to {}", path.display());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Serialise env-mutating tests so they don't race each other.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_home<F: FnOnce()>(dir: &std::path::Path, f: F) {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let prev = std::env::var("HOME").ok();
+        std::env::set_var("HOME", dir);
+        f();
+        match prev {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+
+    #[test]
+    fn state_path_ends_with_forge_json() {
+        let dir = tempfile::tempdir().unwrap();
+        with_home(dir.path(), || {
+            let path = state_path().unwrap();
+            assert!(path.ends_with(".forge/forge.json"));
+        });
+    }
+
+    #[test]
+    fn load_returns_default_when_no_file_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        with_home(dir.path(), || {
+            let state = load_state().unwrap();
+            assert_eq!(state.schema_version, STATE_SCHEMA_VERSION);
+            assert_eq!(state.tier, "free");
+            assert!(state.projects.is_empty());
+        });
+    }
+
+    #[test]
+    fn save_and_load_roundtrip_preserves_data() {
+        let dir = tempfile::tempdir().unwrap();
+        with_home(dir.path(), || {
+            let mut state = ForgeState::default();
+            state.set_tier("pro");
+
+            save_state(&state).unwrap();
+            let loaded = load_state().unwrap();
+
+            assert_eq!(loaded.tier, "pro");
+            assert_eq!(loaded.schema_version, STATE_SCHEMA_VERSION);
+        });
+    }
+
+    #[test]
+    fn save_stamps_current_schema_version() {
+        let dir = tempfile::tempdir().unwrap();
+        with_home(dir.path(), || {
+            // Write a state that has an older schema_version directly.
+            let mut state = ForgeState::default();
+            state.schema_version = 0; // pretend it's old
+            // save_state should overwrite schema_version with STATE_SCHEMA_VERSION.
+            save_state(&state).unwrap();
+            let loaded = load_state().unwrap();
+            assert_eq!(loaded.schema_version, STATE_SCHEMA_VERSION);
+        });
+    }
+}

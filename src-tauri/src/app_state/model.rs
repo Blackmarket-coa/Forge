@@ -98,3 +98,70 @@ impl Default for ForgeState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_state_has_current_schema_version() {
+        let state = ForgeState::default();
+        assert_eq!(state.schema_version, STATE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn default_state_tier_is_free() {
+        let state = ForgeState::default();
+        assert_eq!(state.tier, "free");
+    }
+
+    #[test]
+    fn set_tier_updates_tier_field() {
+        let mut state = ForgeState::default();
+        state.set_tier("pro");
+        assert_eq!(state.tier, "pro");
+    }
+
+    #[test]
+    fn default_preferences_match_expected_values() {
+        let prefs = ForgePreferences::default();
+        assert_eq!(prefs.theme, "system");
+        assert_eq!(prefs.terminal_font_size, 13);
+        assert_eq!(prefs.default_package_manager, "npm");
+        assert!(prefs.auto_check_updates);
+    }
+
+    #[test]
+    fn state_round_trips_through_json() {
+        let mut state = ForgeState::default();
+        state.set_tier("team");
+
+        let json = serde_json::to_string(&state).unwrap();
+        let restored: ForgeState = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.schema_version, state.schema_version);
+        assert_eq!(restored.tier, "team");
+        assert_eq!(restored.preferences.theme, state.preferences.theme);
+    }
+
+    /// A state file written before schema_version was added should deserialise
+    /// with the default value of 1 rather than failing.
+    #[test]
+    fn missing_schema_version_in_json_defaults_to_one() {
+        let json = r#"{
+            "projects": [],
+            "workspaces": [],
+            "build_presets": [],
+            "build_history": [],
+            "preferences": {
+                "theme": "system",
+                "terminal_font_size": 13,
+                "default_package_manager": "npm",
+                "auto_check_updates": true
+            },
+            "tier": "free"
+        }"#;
+        let state: ForgeState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.schema_version, 1);
+    }
+}
