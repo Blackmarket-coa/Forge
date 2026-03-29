@@ -1,5 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { open as dialogOpen } from '@tauri-apps/plugin-dialog'
+
+/** Opens a native folder picker and returns the selected path, or null if cancelled. */
+export const pickFolder = (): Promise<string | null> =>
+  dialogOpen({ directory: true, multiple: false }).then(r => r as string | null)
 import type {
   LicenseStatus,
   ProjectMeta,

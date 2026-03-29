@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getProjects, getWorkspaces, registerProject, scanDirectory } from '../lib/ipc'
+import { getProjects, getWorkspaces, registerProject, scanDirectory, pickFolder } from '../lib/ipc'
 import type { ProjectMeta, Workspace } from '../lib/types'
 
 function statusBadgeClass(status: string) {
@@ -19,6 +19,11 @@ function AddProjectDialog({ onClose, onAdded }: AddProjectDialogProps) {
   const [path, setPath] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  async function handleBrowse() {
+    const selected = await pickFolder()
+    if (selected) setPath(selected)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,13 +48,17 @@ function AddProjectDialog({ onClose, onAdded }: AddProjectDialogProps) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="label">Project Path</label>
-            <input
-              className="input"
-              value={path}
-              onChange={e => setPath(e.target.value)}
-              placeholder="/path/to/your/tauri-project"
-              autoFocus
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="input"
+                value={path}
+                onChange={e => setPath(e.target.value)}
+                placeholder="/path/to/your/tauri-project"
+                autoFocus
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn" onClick={handleBrowse}>Browse</button>
+            </div>
             {error && <div className="error-msg">{error}</div>}
           </div>
           <div className="dialog-footer">
@@ -75,6 +84,11 @@ function ScanDialog({ onClose, onFound }: ScanDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  async function handleBrowse() {
+    const selected = await pickFolder()
+    if (selected) setPath(selected)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!path.trim()) return
@@ -98,13 +112,17 @@ function ScanDialog({ onClose, onFound }: ScanDialogProps) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="label">Directory to Scan</label>
-            <input
-              className="input"
-              value={path}
-              onChange={e => setPath(e.target.value)}
-              placeholder="/path/to/scan"
-              autoFocus
-            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="input"
+                value={path}
+                onChange={e => setPath(e.target.value)}
+                placeholder="/path/to/scan"
+                autoFocus
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="btn" onClick={handleBrowse}>Browse</button>
+            </div>
             {error && <div className="error-msg">{error}</div>}
           </div>
           <div className="dialog-footer">
