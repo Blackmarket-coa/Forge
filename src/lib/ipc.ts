@@ -127,4 +127,4 @@ export const checkEnvironment = () =>
 export const listenProcessOutput = (
   cb: (event: ProcessOutputEvent) => void
 ) =>
-  listen<ProcessOutputEvent>('forge://process-output', (e) => cb(e.payload))
+  listen<ProcessOutputEvent>('process-output', (e) => cb(e.payload))
