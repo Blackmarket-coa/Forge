@@ -5,7 +5,28 @@ on:
     tags: ["v*"]
 
 jobs:
+  test:
+    name: Test & Lint (Rust)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Run tests
+        working-directory: src-tauri
+        run: cargo test --all-features
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-features -- -D warnings
+
   build:
+    name: Build (${{ matrix.platform }})
+    needs: test
     strategy:
       matrix:
         platform: [macos-latest, ubuntu-22.04, windows-latest]
@@ -16,6 +37,11 @@ jobs:
         with:
           node-version: 20
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
