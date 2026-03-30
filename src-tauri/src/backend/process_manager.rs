@@ -20,9 +20,10 @@ struct ManagedProcess {
 }
 
 #[derive(Serialize, Clone)]
-struct ProcessLinePayload {
-    id: String,
-    line: String,
+struct ProcessOutputPayload {
+    process_id: String,
+    data: String,
+    is_stderr: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -80,8 +81,12 @@ impl ProcessManager {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines().map_while(Result::ok) {
                     let _ = app_out.emit(
-                        "process-stdout",
-                        serde_json::json!({ "id": id_out, "line": line }),
+                        "process-output",
+                        ProcessOutputPayload {
+                            process_id: id_out.clone(),
+                            data: line,
+                            is_stderr: false,
+                        },
                     );
                 }
             });
@@ -94,8 +99,12 @@ impl ProcessManager {
                 let reader = BufReader::new(stderr);
                 for line in reader.lines().map_while(Result::ok) {
                     let _ = app_err.emit(
-                        "process-stderr",
-                        serde_json::json!({ "id": id_err, "line": line }),
+                        "process-output",
+                        ProcessOutputPayload {
+                            process_id: id_err.clone(),
+                            data: line,
+                            is_stderr: true,
+                        },
                     );
                 }
             });
