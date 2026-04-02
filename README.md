@@ -27,25 +27,81 @@ Forge is under active development. The repository currently includes:
 
 ### Prerequisites
 
-- Rust toolchain (stable)
-- Node.js 20+
-- Tauri dependencies for your platform
+Install these once before launching Forge:
 
-### Run frontend only
+- **Rust (stable)** via `rustup`
+- **Node.js 20+**
+- **Tauri system dependencies** for your OS (WebKitGTK on Linux, Xcode CLT on
+  macOS, WebView2 on Windows)
+
+Quick verification commands:
+
+```bash
+rustc --version
+cargo --version
+node --version
+```
+
+### First-time setup
+
+Forge's frontend lives in `web/`, so install dependencies there first.
+
+#### Option A (recommended): Yarn via Corepack
+
+```bash
+cd web
+corepack enable
+yarn install
+```
+
+#### Option B: npm
 
 ```bash
 cd web
 npm install
+```
+
+### Launch modes
+
+#### 1) Frontend-only development (fast UI iteration)
+
+```bash
+cd web
 npm run dev
 ```
 
-### Run Tauri app
+This starts the React dev server without launching the desktop shell.
+
+#### 2) Full desktop app (Tauri + frontend)
 
 ```bash
 cd web
-npm install
 npm run tauri dev
 ```
+
+This launches Forge as a desktop app and rebuilds automatically on source
+changes.
+
+### Production build (local)
+
+From `web/`:
+
+```bash
+npm run build
+npm run tauri build
+```
+
+Artifacts are generated under `src-tauri/target/`.
+
+### Common launch issues
+
+- **`tauri: command not found`**: install JS dependencies in `web/` and run via
+  package scripts (`npm run tauri ...`) instead of a global binary.
+- **Linux WebKitGTK errors**: install your distro's WebKitGTK development
+  packages and related GTK build dependencies, then retry.
+- **Rust target/toolchain issues**: run `rustup update` and reopen your shell.
+- **Port already in use (dev server)**: stop the existing process or set a new
+  port for the frontend dev server.
 
 ## License/tier behavior (current)
 
