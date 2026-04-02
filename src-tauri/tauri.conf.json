@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.forge.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "beforeDevCommand": "cd web && npm run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "cd web && npm run build",
+    "frontendDist": "../web/build"
   },
   "app": {
     "windows": [
@@ -21,13 +21,5 @@
   "bundle": {
     "active": true,
     "targets": "all"
-  },
-  "plugins": {
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/blackmarket-coa/forge/releases/latest/download/latest.json"
-      ]
-    }
   }
 }

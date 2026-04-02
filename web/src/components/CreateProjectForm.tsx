@@ -69,10 +69,8 @@ export default function CreateProjectForm({
       setDirectory(selected)
     }
   }
-
-  const next = () => setStep((s) => Math.min(5, (s + 1) as Step))
-  const back = () => setStep((s) => Math.max(1, (s - 1) as Step))
-
+const next = () => setStep((s) => Math.min(5, s + 1) as Step)
+const back = () => setStep((s) => Math.max(1, s - 1) as Step)
   const create = async () => {
     setCreating(true)
     setStep(5)
