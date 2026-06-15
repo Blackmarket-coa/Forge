@@ -59,11 +59,8 @@ fn read_license_file() -> Result<LicenseFile, String> {
 
 fn write_license_file(file: &LicenseFile) -> Result<(), String> {
     let path = license_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let content = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
-    fs::write(path, content).map_err(|e| e.to_string())
+    crate::backend::fs_util::write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
 fn mask_key(key: &str) -> String {
@@ -166,11 +163,7 @@ fn parse_validation_response(value: &Value) -> (bool, String, Option<String>) {
 async fn validate_key_remote(key: &str) -> Result<CachedValidation, String> {
     let account_id =
         std::env::var("KEYGEN_ACCOUNT_ID").unwrap_or_else(|_| "demo-account".to_string());
-    let endpoint = format!(
-        "{}/{}/licenses/actions/validate-key",
-        KEYGEN_API,
-        format!("accounts/{account_id}")
-    );
+    let endpoint = format!("{KEYGEN_API}/accounts/{account_id}/licenses/actions/validate-key");
 
     let client = reqwest::Client::new();
     let response = client
@@ -252,4 +245,56 @@ pub fn clear_license() -> Result<LicenseStatus, String> {
         fs::remove_file(path).map_err(|e| e.to_string())?;
     }
     Ok(free_status())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mask_key_hides_middle() {
+        assert_eq!(mask_key("FORGE-ABCD-1234-WXYZ"), "FORG****WXYZ");
+        assert_eq!(mask_key("short"), "****");
+    }
+
+    #[test]
+    fn parse_uses_meta_valid_and_tier() {
+        let body = json!({ "meta": { "valid": true, "tier": "pro" } });
+        let (valid, tier, _) = parse_validation_response(&body);
+        assert!(valid);
+        assert_eq!(tier, "pro");
+    }
+
+    #[test]
+    fn parse_invalid_falls_back_to_free() {
+        let body = json!({ "meta": { "valid": false, "tier": "team" } });
+        let (valid, tier, _) = parse_validation_response(&body);
+        assert!(!valid);
+        assert_eq!(tier, "free");
+    }
+
+    #[test]
+    fn parse_detects_team_from_policy_name() {
+        let body = json!({
+            "meta": { "valid": true },
+            "data": { "attributes": { "policy": { "name": "Team Annual" } } }
+        });
+        let (_, tier, _) = parse_validation_response(&body);
+        assert_eq!(tier, "team");
+    }
+
+    #[test]
+    fn cached_status_masks_key_and_keeps_tier() {
+        let cache = CachedValidation {
+            tier: "pro".to_string(),
+            valid: true,
+            expires_at: Some("2030-01-01".to_string()),
+            checked_at: 42,
+        };
+        let status = status_from_cache(&cache, Some("FORGE-ABCD-1234-WXYZ"));
+        assert_eq!(status.tier, "pro");
+        assert!(status.valid);
+        assert_eq!(status.key_masked.as_deref(), Some("FORG****WXYZ"));
+        assert_eq!(status.checked_at, Some(42));
+    }
 }

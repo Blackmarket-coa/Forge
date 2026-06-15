@@ -36,31 +36,29 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
 
     const unsubs: Array<() => void> = []
 
+    const matches = (id: string) =>
+      !processIdPrefix || id.includes(processIdPrefix)
+
     const addListener = async (
       event: string,
       handler: (payload: any) => void
     ) => {
       const unlisten = await listen(event, (e: any) => {
-        const payload: any = e.payload || {}
-        if (
-          !processIdPrefix ||
-          String(payload.id || "").startsWith(processIdPrefix)
-        ) {
-          handler(payload)
-        }
+        handler(e.payload || {})
       })
       unsubs.push(unlisten)
     }
 
-    void addListener("process-stdout", (payload) => {
-      term.writeln(payload.line || "")
-    })
-
-    void addListener("process-stderr", (payload) => {
-      term.writeln(`\x1b[33m${payload.line || ""}\x1b[0m`)
+    // The backend emits a single "process-output" event carrying a stderr flag,
+    // plus a "process-exit" event when the process finishes.
+    void addListener("process-output", (payload) => {
+      if (!matches(String(payload.process_id || ""))) return
+      const text = payload.data || ""
+      term.writeln(payload.is_stderr ? `\x1b[33m${text}\x1b[0m` : text)
     })
 
     void addListener("process-exit", (payload) => {
+      if (!matches(String(payload.id || ""))) return
       term.writeln(
         `\x1b[31mProcess exited (id=${payload.id}) with code ${payload.code}\x1b[0m`
       )

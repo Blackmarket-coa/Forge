@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::PathBuf;
 
-use log::{debug, info, warn};
+use log::{debug, info};
 
 use crate::app_state::model::{ForgeState, STATE_SCHEMA_VERSION};
 use crate::backend::errors::ForgeError;
+use crate::backend::fs_util::write_atomic;
 
 pub fn state_path() -> Result<PathBuf, ForgeError> {
     let home = std::env::var("HOME")
@@ -13,13 +14,12 @@ pub fn state_path() -> Result<PathBuf, ForgeError> {
     Ok(home.join(".forge").join("forge.json"))
 }
 
-/// Load persisted state, applying any schema migrations required to bring an
-/// older file up to the current [`STATE_SCHEMA_VERSION`].
+/// Load persisted state, bringing an older file up to the current
+/// [`STATE_SCHEMA_VERSION`] when needed.
 ///
-/// Migration strategy: each version bump adds an arm to the `while` loop
-/// below.  Migrations run in order until the state reaches the current
-/// version, so callers always receive a fully up-to-date value regardless of
-/// how old the on-disk file is.
+/// Migration strategy: as the schema evolves, add transforms in `migrate`
+/// below that step an older value up one version at a time, so callers always
+/// receive a fully up-to-date value regardless of how old the on-disk file is.
 pub fn load_state() -> Result<ForgeState, ForgeError> {
     let path = state_path()?;
     if !path.exists() {
@@ -27,45 +27,33 @@ pub fn load_state() -> Result<ForgeState, ForgeError> {
     }
 
     let content = fs::read_to_string(path)?;
-    let mut state = serde_json::from_str::<ForgeState>(&content)?;
-
-    // Run incremental migrations.
-    if state.schema_version < STATE_SCHEMA_VERSION {
-        warn!(
-            "state file is schema version {}; current version is {} — migrating",
-            state.schema_version, STATE_SCHEMA_VERSION
-        );
-    }
-    while state.schema_version < STATE_SCHEMA_VERSION {
-        match state.schema_version {
-            // Example migration template — add real migrations here as the
-            // schema evolves:
-            //
-            //   1 => { state.new_field = default_value(); state.schema_version = 2; }
-            //
-            v => {
-                return Err(ForgeError::ConfigInvalid(format!(
-                    "unknown state schema version {v}; please upgrade Forge"
-                )))
-            }
-        }
-    }
+    let state = serde_json::from_str::<ForgeState>(&content)?;
+    let state = migrate(state)?;
 
     debug!("loaded state (schema_version={})", state.schema_version);
     Ok(state)
 }
 
+/// Upgrade an older on-disk state to the current schema. Today only version 1
+/// exists; future versions add arms that mutate and bump `schema_version`.
+fn migrate(state: ForgeState) -> Result<ForgeState, ForgeError> {
+    if state.schema_version > STATE_SCHEMA_VERSION {
+        return Err(ForgeError::ConfigInvalid(format!(
+            "state schema version {} is newer than supported version {}; please upgrade Forge",
+            state.schema_version, STATE_SCHEMA_VERSION
+        )));
+    }
+    Ok(state)
+}
+
 pub fn save_state(state: &ForgeState) -> Result<(), ForgeError> {
     let path = state_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
 
     let mut state = state.clone();
     state.schema_version = STATE_SCHEMA_VERSION;
 
     let content = serde_json::to_string_pretty(&state)?;
-    fs::write(&path, content)?;
+    write_atomic(&path, content.as_bytes())?;
     info!("state saved to {}", path.display());
     Ok(())
 }
@@ -125,13 +113,14 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn save_stamps_current_schema_version() {
         let dir = tempfile::tempdir().unwrap();
         with_home(dir.path(), || {
             // Write a state that has an older schema_version directly.
             let mut state = ForgeState::default();
             state.schema_version = 0; // pretend it's old
-            // save_state should overwrite schema_version with STATE_SCHEMA_VERSION.
+                                      // save_state should overwrite schema_version with STATE_SCHEMA_VERSION.
             save_state(&state).unwrap();
             let loaded = load_state().unwrap();
             assert_eq!(loaded.schema_version, STATE_SCHEMA_VERSION);

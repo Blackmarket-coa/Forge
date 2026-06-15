@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { useSnackbar } from "notistack"
 import {
   collectArtifacts,
@@ -55,10 +55,9 @@ export default function ProjectView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id])
 
-  const processIdPrefix = useMemo(
-    () => processId || project.path,
-    [processId, project.path]
-  )
+  // Process ids are like `dev:{path}` and `build:{path}:{target}`, so matching
+  // on the project path shows both dev and build output for this project.
+  const processIdPrefix = project.path
 
   const handleDev = async () => {
     try {

@@ -4,13 +4,19 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use log::{info, warn};
 use serde_json::json;
 use tauri::AppHandle;
 use uuid::Uuid;
 
-use crate::app_state::model::{Artifact, BuildPreset, BuildRecord, BuildStep};
+use crate::app_state::model::{Artifact, BuildPreset, BuildRecord};
 use crate::app_state::store::{load_state, save_state, state_path};
 use crate::backend::config_manager;
+use crate::backend::fs_util::write_atomic;
+
+/// Cap how many build records we keep on disk so `build_history.json` cannot
+/// grow without bound over the lifetime of a project.
+const MAX_BUILD_HISTORY: usize = 200;
 use crate::backend::license;
 use crate::backend::process_manager::ProcessManager;
 use crate::backend::project_manager::{
@@ -44,11 +50,16 @@ fn load_history() -> Result<Vec<BuildRecord>, String> {
 
 fn save_history(records: &[BuildRecord]) -> Result<(), String> {
     let path = build_history_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+
+    // Keep only the most recent records so the file stays bounded.
+    let mut bounded = records.to_vec();
+    if bounded.len() > MAX_BUILD_HISTORY {
+        bounded.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+        bounded.truncate(MAX_BUILD_HISTORY);
     }
-    let content = serde_json::to_string_pretty(records).map_err(|e| e.to_string())?;
-    fs::write(path, content).map_err(|e| e.to_string())
+
+    let content = serde_json::to_string_pretty(&bounded).map_err(|e| e.to_string())?;
+    write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
 fn sync_tier_to_state(tier: &str) -> Result<(), String> {
@@ -165,6 +176,8 @@ pub async fn run_dev(project_path: String, app_handle: AppHandle) -> Result<u32,
 
     let _pm = detect_package_manager(&project_dir);
 
+    info!("run_dev: starting dev server for {project_path}");
+
     let mut manager = process_manager()
         .lock()
         .map_err(|_| "failed to lock process manager".to_string())?;
@@ -191,6 +204,7 @@ pub async fn run_build(
 
 #[tauri::command]
 pub async fn kill_process(process_id: String) -> Result<(), String> {
+    info!("kill_process: terminating {process_id}");
     let mut manager = process_manager()
         .lock()
         .map_err(|_| "failed to lock process manager".to_string())?;
@@ -779,6 +793,11 @@ fn run_build_internal(
     let project_dir = PathBuf::from(project_path);
     let mut status = "success".to_string();
 
+    info!(
+        "run_build: building {project_path} for targets [{}]",
+        targets.join(", ")
+    );
+
     for target in targets {
         let process_id = format!("build:{}:{}", project_path, target);
         {
@@ -806,6 +825,7 @@ fn run_build_internal(
         };
 
         if exit_code != 0 {
+            warn!("run_build: target {target} exited with code {exit_code}");
             status = "failed".to_string();
             break;
         }
