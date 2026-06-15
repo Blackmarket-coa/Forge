@@ -1,0 +1,117 @@
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-subtle);
+}
+
+.stepNum {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-bg-inset);
+  font-size: 11px;
+}
+
+.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.active .stepNum {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.done {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.todo {
+  opacity: 0.7;
+}
+
+.body {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 560px;
+}
+
+.dirRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-2);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-inset);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size);
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.option:hover:not(:disabled) {
+  border-color: var(--color-text-subtle);
+}
+.option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.optionActive {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.checkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-4);
+}
+
+.footerRight {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}

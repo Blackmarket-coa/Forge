@@ -147,6 +147,12 @@ impl ProcessManager {
         Ok(status.code().unwrap_or(-1))
     }
 
+    /// Stop a managed process.
+    ///
+    /// On Unix this asks the process to exit gracefully with `SIGTERM`, waits
+    /// briefly for it to shut down (so dev servers can clean up), and escalates
+    /// to `SIGKILL` only if it ignores the request. On other platforms it
+    /// terminates immediately.
     pub fn kill(&mut self, id: &str) -> Result<(), ForgeError> {
         let managed = self
             .processes
@@ -157,6 +163,28 @@ impl ProcessManager {
             .child
             .lock()
             .map_err(|_| ForgeError::ProcessError("failed to lock process for kill".to_string()))?;
+
+        #[cfg(unix)]
+        {
+            // SAFETY: sending a signal to a pid is a simple libc call; an
+            // invalid/exited pid just returns an error we ignore.
+            unsafe {
+                libc::kill(managed.pid as libc::pid_t, libc::SIGTERM);
+            }
+
+            // Give the process up to ~2s to exit gracefully.
+            for _ in 0..20 {
+                match lock.try_wait() {
+                    Ok(Some(_)) => return Ok(()),
+                    Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+                    Err(e) => {
+                        return Err(ForgeError::ProcessError(format!(
+                            "failed to poll process: {e}"
+                        )))
+                    }
+                }
+            }
+        }
 
         lock.kill()
             .map_err(|e| ForgeError::ProcessError(format!("failed to kill process: {e}")))?;

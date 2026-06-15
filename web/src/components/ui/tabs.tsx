@@ -1,4 +1,5 @@
 import React from "react"
+import styles from "./tabs.module.scss"
 
 interface TabsProps {
   value: string
@@ -8,18 +9,16 @@ interface TabsProps {
 
 export function Tabs({ value, onValueChange, tabs }: TabsProps) {
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div className={styles.tabs} role="tablist">
       {tabs.map((tab) => (
         <button
           key={tab.value}
+          role="tab"
+          aria-selected={value === tab.value}
+          className={[styles.tab, value === tab.value ? styles.active : ""]
+            .filter(Boolean)
+            .join(" ")}
           onClick={() => onValueChange(tab.value)}
-          style={{
-            border: "1px solid #666",
-            background: value === tab.value ? "#444" : "transparent",
-            color: "white",
-            borderRadius: 6,
-            padding: "4px 10px",
-          }}
         >
           {tab.label}
         </button>

@@ -74,34 +74,70 @@ This starts the React dev server without launching the desktop shell.
 
 #### 2) Full desktop app (Tauri + frontend)
 
+The Tauri CLI must be run from the **repository root** (the folder that
+contains `src-tauri/`), not from `web/`. Install the CLI once:
+
 ```bash
-cd web
-npm run tauri dev
+cargo install tauri-cli --version "^2"
+```
+
+Then, from the repository root:
+
+```bash
+cargo tauri dev
 ```
 
 This launches Forge as a desktop app and rebuilds automatically on source
-changes.
+changes. (`cargo tauri` automatically runs the `web/` dev server via the
+`beforeDevCommand` in `src-tauri/tauri.conf.json`.)
 
 ### Production build (local)
 
-From `web/`:
+From the repository root:
 
 ```bash
-npm run build
-npm run tauri build
+cargo tauri build
 ```
 
-Artifacts are generated under `src-tauri/target/`.
+This builds the frontend and the Rust app and produces a desktop bundle.
+Artifacts are generated under `src-tauri/target/`. Use `--no-bundle` to compile
+the binary without packaging installers.
 
 ### Common launch issues
 
-- **`tauri: command not found`**: install JS dependencies in `web/` and run via
-  package scripts (`npm run tauri ...`) instead of a global binary.
+- **"Couldn't recognize the current folder as a Tauri project"**: run `cargo
+  tauri` from the repository root, not from `web/` — `src-tauri/` must be a
+  subfolder of your working directory.
+- **`tauri: command not found`**: install the CLI with
+  `cargo install tauri-cli --version "^2"`.
 - **Linux WebKitGTK errors**: install your distro's WebKitGTK development
   packages and related GTK build dependencies, then retry.
 - **Rust target/toolchain issues**: run `rustup update` and reopen your shell.
 - **Port already in use (dev server)**: stop the existing process or set a new
   port for the frontend dev server.
+
+## Testing & quality
+
+Forge has frontend and backend test suites, gated in CI on every push and pull
+request (`.github/workflows/ci.yml`).
+
+Frontend (`web/`):
+
+```bash
+yarn check                 # prettier + tsc + eslint
+yarn test --watchAll=false # unit tests
+```
+
+Backend (`src-tauri/`):
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+> Building the desktop backend on Linux requires the Tauri system packages
+> (WebKitGTK, GTK, etc.). See the release workflow for the exact package list.
 
 ## License/tier behavior (current)
 
@@ -115,7 +151,30 @@ Artifacts are generated under `src-tauri/target/`.
 Create and push a semantic tag like `v0.1.0` to trigger the cross-platform
 release workflow. Releases are created as **drafts** by default.
 
+### Auto-updater
+
+Forge ships with the Tauri updater. Built apps check
+`https://github.com/<owner>/Forge/releases/latest/download/latest.json` and can
+self-update from signed releases (see **Settings → Updates**).
+
+Updater artifacts must be signed. Generate a keypair once:
+
+```bash
+cargo tauri signer generate -w ~/.forge-updater.key
+```
+
+The **public** key goes in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
+Store the **private** key and its password as repository secrets so the release
+workflow can sign updates:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Keep the private key out of source control.
+
 ## Notes
 
-This README reflects the current scaffold and will evolve as Forge moves from
-baseline implementation to production-ready behavior.
+The frontend ships a custom, themeable design system (`web/src/components/ui/`)
+and an application shell with sidebar navigation, onboarding, and toast
+feedback. Backend file writes are atomic and spawned build/dev processes are
+shut down gracefully.

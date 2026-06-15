@@ -29,6 +29,12 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Required to sign the auto-updater artifacts and latest.json.
+          # Generate a keypair with `tauri signer generate` and store the
+          # private key + password as repository secrets. The matching public
+          # key lives in src-tauri/tauri.conf.json (plugins.updater.pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Forge ${{ github.ref_name }}

@@ -37,9 +37,7 @@ pub fn validate_startup_env() {
             Ok(val) if check.sentinel.map(|s| val == s).unwrap_or(false) => {
                 warn!(
                     "config: {} is set to the placeholder value '{}' — {}",
-                    check.var,
-                    val,
-                    check.hint
+                    check.var, val, check.hint
                 );
                 all_ok = false;
             }

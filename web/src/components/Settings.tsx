@@ -1,54 +1,152 @@
 import React, { useState } from "react"
+import { useSnackbar } from "notistack"
 import { useAppState } from "../providers/AppStateProvider"
+import EnvironmentCheck from "./EnvironmentCheck"
+import UpdateChecker from "./UpdateChecker"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card } from "./ui/card"
+import { ConfirmDialog } from "./ui/dialog"
+import { Field } from "./ui/field"
+import { Input } from "./ui/input"
+import { PageHeader } from "./ui/page-header"
+import styles from "./Settings.module.scss"
 
 export default function Settings() {
-  const { theme, toggleTheme, tier, licenseStatus, activateLicense, clearLicenseKey } = useAppState()
+  const { tier, licenseStatus, activateLicense, clearLicenseKey } =
+    useAppState()
+  const { enqueueSnackbar } = useSnackbar()
   const [draftKey, setDraftKey] = useState("")
-  const [message, setMessage] = useState<string | null>(null)
+  const [activating, setActivating] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const onActivate = async () => {
+    if (!draftKey.trim()) return
+    setActivating(true)
     try {
-      const status = await activateLicense(draftKey)
-      setMessage(status.valid ? `Activated ${status.tier.toUpperCase()} tier.` : "License key invalid")
-      setDraftKey("")
+      const status = await activateLicense(draftKey.trim())
+      enqueueSnackbar(
+        status.valid
+          ? `Activated ${status.tier.toUpperCase()} tier`
+          : "License key invalid",
+        { variant: status.valid ? "success" : "error" }
+      )
+      if (status.valid) setDraftKey("")
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Activation failed")
+      enqueueSnackbar(
+        error instanceof Error ? error.message : "Activation failed",
+        { variant: "error" }
+      )
+    } finally {
+      setActivating(false)
     }
   }
 
   const onRemove = async () => {
     await clearLicenseKey()
-    setMessage("License key removed. Free tier active.")
+    setConfirmRemove(false)
+    enqueueSnackbar("License removed. Free tier active.", { variant: "info" })
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Settings</h2>
-      <p>Current theme: {theme}</p>
-      <button onClick={toggleTheme}>Toggle Theme</button>
-      <p style={{ marginTop: 16 }}>State file: ~/.forge/forge.json</p>
+    <div>
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your license and toolchain."
+      />
 
-      <section style={{ marginTop: 24, display: "grid", gap: 8, maxWidth: 560 }}>
-        <h3>License</h3>
-        <p>Current tier: <strong>{tier.toUpperCase()}</strong></p>
-        <p>License key: {licenseStatus.key_masked || "Not set"}</p>
-        <p>Expires at: {licenseStatus.expires_at || "N/A"}</p>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            placeholder="Enter new license key"
-            value={draftKey}
-            onChange={(event) => setDraftKey(event.target.value)}
-          />
-          <button onClick={onActivate} disabled={!draftKey.trim()}>
-            Change Key
-          </button>
-          <button onClick={onRemove}>Remove Key</button>
-        </div>
-        {message && <p>{message}</p>}
-        <a href="https://forge.dev/pricing" target="_blank" rel="noreferrer">
-          View pricing
-        </a>
-      </section>
+      <div className={styles.grid}>
+        <Card
+          title="License"
+          subtitle="Unlock workspaces, build orchestration, and the deploy dashboard."
+          actions={
+            <Badge tone={tier === "free" ? "neutral" : "accent"}>
+              {tier.toUpperCase()}
+            </Badge>
+          }
+        >
+          <dl className={styles.summary}>
+            <dt>Key</dt>
+            <dd>{licenseStatus.key_masked || "Not set"}</dd>
+            <dt>Expires</dt>
+            <dd>{licenseStatus.expires_at || "N/A"}</dd>
+          </dl>
+
+          <Field
+            label="License key"
+            help="Enter a Forge Pro or Team key to upgrade."
+          >
+            <div className={styles.keyRow}>
+              <Input
+                placeholder="FORGE-XXXX-XXXX-XXXX"
+                value={draftKey}
+                onChange={(e) => setDraftKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onActivate()}
+              />
+              <Button
+                variant="primary"
+                onClick={onActivate}
+                loading={activating}
+                disabled={!draftKey.trim()}
+              >
+                Activate
+              </Button>
+            </div>
+          </Field>
+
+          <div className={styles.licenseFooter}>
+            <a
+              href="https://forge.dev/pricing"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View pricing
+            </a>
+            {licenseStatus.key_masked && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setConfirmRemove(true)}
+              >
+                Remove key
+              </Button>
+            )}
+          </div>
+        </Card>
+
+        <Card
+          title="Toolchain"
+          subtitle="Forge builds run locally and need these tools installed."
+        >
+          <EnvironmentCheck />
+        </Card>
+
+        <Card
+          title="Updates"
+          subtitle="Forge can update itself from signed releases."
+        >
+          <UpdateChecker />
+        </Card>
+
+        <Card title="About">
+          <dl className={styles.summary}>
+            <dt>App state</dt>
+            <dd>~/.forge/forge.json</dd>
+            <dt>License cache</dt>
+            <dd>~/.forge/license.json</dd>
+          </dl>
+        </Card>
+      </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remove license key?"
+        message="Forge will revert to the Free tier and Pro features will be locked."
+        confirmLabel="Remove key"
+        destructive
+        onConfirm={onRemove}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   )
 }

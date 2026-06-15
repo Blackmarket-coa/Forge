@@ -1,34 +1,73 @@
 import React, { useEffect, useMemo, useState } from "react"
+import { useSnackbar } from "notistack"
 import { readConfig, validateConfig, writeConfig } from "../api/api"
+import { diffConfig } from "../lib/diff"
+import { Banner } from "./ui/banner"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
 import { Collapsible } from "./ui/collapsible"
+import { ConfirmDialog } from "./ui/dialog"
+import { Field } from "./ui/field"
 import { Input } from "./ui/input"
+import { PageHeader } from "./ui/page-header"
 import { Select } from "./ui/select"
 import { Tabs } from "./ui/tabs"
+import styles from "./ConfigEditor.module.scss"
 
 type Mode = "form" | "json"
 
-export default function ConfigEditor({ projectPath }: { projectPath: string }) {
+const CATEGORY_OPTIONS = [
+  "Business",
+  "Developer Tool",
+  "Education",
+  "Entertainment",
+  "Finance",
+  "Game",
+  "Graphics",
+  "Lifestyle",
+  "Music",
+  "Productivity",
+  "Utilities",
+]
+
+const BUNDLE_TARGETS = ["dmg", "appimage", "deb", "nsis", "msi"] as const
+
+export default function ConfigEditor({
+  projectPath,
+  projectName,
+  onBack,
+}: {
+  projectPath: string
+  projectName?: string
+  onBack?: () => void
+}) {
+  const { enqueueSnackbar } = useSnackbar()
   const [mode, setMode] = useState<Mode>("form")
   const [config, setConfig] = useState<any>({})
+  const [original, setOriginal] = useState<any>({})
   const [rawJson, setRawJson] = useState("{}")
   const [issues, setIssues] = useState<string[]>([])
-  const [message, setMessage] = useState("")
+  const [jsonError, setJsonError] = useState("")
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const loadConfig = async () => {
     try {
       const cfg = await readConfig(projectPath)
       setConfig(cfg)
+      setOriginal(cfg)
       setRawJson(JSON.stringify(cfg, null, 2))
-      setMessage("")
+      setJsonError("")
     } catch (e: any) {
-      setMessage(`Failed to load config: ${e?.message || e}`)
+      enqueueSnackbar(`Failed to load config: ${e?.message || e}`, {
+        variant: "error",
+      })
     }
   }
 
   useEffect(() => {
     void loadConfig()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectPath])
 
   const updateConfig = (next: any) => {
@@ -58,25 +97,50 @@ export default function ConfigEditor({ projectPath }: { projectPath: string }) {
     next.app.windows[0][key] = value
     updateConfig(next)
   }
+
   const build = config?.build ?? {}
   const bundle = config?.bundle ?? {}
+
+  const changes = useMemo(
+    () => diffConfig(original, config),
+    [original, config]
+  )
 
   const onRawJsonChange = (value: string) => {
     setRawJson(value)
     try {
-      const parsed = JSON.parse(value)
-      setConfig(parsed)
-    } catch {
-      // Keep raw json editing tolerant until save/validate.
+      setConfig(JSON.parse(value))
+      setJsonError("")
+    } catch (e: any) {
+      setJsonError(e?.message || "Invalid JSON")
     }
   }
 
+  const requestSave = () => {
+    if (jsonError) {
+      enqueueSnackbar("Fix the JSON errors before saving.", {
+        variant: "error",
+      })
+      return
+    }
+    if (changes.length === 0) {
+      enqueueSnackbar("No changes to save.", { variant: "info" })
+      return
+    }
+    setConfirmOpen(true)
+  }
+
   const handleSave = async () => {
+    setSaving(true)
     try {
       await writeConfig(projectPath, config)
-      setMessage("Saved successfully")
+      setOriginal(config)
+      setConfirmOpen(false)
+      enqueueSnackbar("Configuration saved", { variant: "success" })
     } catch (e: any) {
-      setMessage(`Save failed: ${e?.message || e}`)
+      enqueueSnackbar(`Save failed: ${e?.message || e}`, { variant: "error" })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -84,29 +148,18 @@ export default function ConfigEditor({ projectPath }: { projectPath: string }) {
     try {
       const nextIssues = await validateConfig(projectPath, config)
       setIssues(nextIssues)
-      setMessage(
+      enqueueSnackbar(
         nextIssues.length
-          ? "Validation completed with issues"
-          : "Validation passed"
+          ? `Found ${nextIssues.length} issue(s)`
+          : "Validation passed",
+        { variant: nextIssues.length ? "warning" : "success" }
       )
     } catch (e: any) {
-      setMessage(`Validation failed: ${e?.message || e}`)
+      enqueueSnackbar(`Validation failed: ${e?.message || e}`, {
+        variant: "error",
+      })
     }
   }
-
-  const categoryOptions = [
-    "Business",
-    "Developer Tool",
-    "Education",
-    "Entertainment",
-    "Finance",
-    "Game",
-    "Graphics",
-    "Lifestyle",
-    "Music",
-    "Productivity",
-    "Utilities",
-  ]
 
   const useRecommendedDefaults = () => {
     const next = JSON.parse(JSON.stringify(config || {}))
@@ -129,313 +182,309 @@ export default function ConfigEditor({ projectPath }: { projectPath: string }) {
     next.build.devUrl = next.build.devUrl || "http://localhost:3000"
     next.build.frontendDist = next.build.frontendDist || "../dist"
     updateConfig(next)
-    setMessage("Added beginner-friendly defaults. Review and Save when ready.")
+    enqueueSnackbar("Added beginner-friendly defaults. Review and Save.", {
+      variant: "info",
+    })
   }
-
-  const sectionHintStyle: React.CSSProperties = {
-    fontSize: 12,
-    opacity: 0.75,
-    margin: "2px 0 10px 0",
-  }
-  const rowStyle: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "minmax(180px, 240px) minmax(240px, 1fr)",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  }
-  const helpStyle: React.CSSProperties = {
-    fontSize: 12,
-    opacity: 0.75,
-    marginBottom: 8,
-    gridColumn: "2 / -1",
-  }
-  const labelStyle: React.CSSProperties = { fontWeight: 600 }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2>Config Editor</h2>
-        <Tabs
-          value={mode}
-          onValueChange={(v) => setMode(v as Mode)}
-          tabs={[
-            { value: "form", label: "Form" },
-            { value: "json", label: "JSON" },
-          ]}
-        />
-      </div>
-      <p style={{ margin: "4px 0 14px 0", opacity: 0.9 }}>
-        Use <strong>Form</strong> for guided editing. Use <strong>JSON</strong>{" "}
-        only if you need advanced options.
-      </p>
+    <div>
+      {onBack && (
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          ← Back to Project
+        </Button>
+      )}
+
+      <PageHeader
+        title="Configuration"
+        subtitle={
+          projectName
+            ? `Editing tauri.conf.json for ${projectName}`
+            : "Editing tauri.conf.json"
+        }
+        actions={
+          <Tabs
+            value={mode}
+            onValueChange={(v) => setMode(v as Mode)}
+            tabs={[
+              { value: "form", label: "Form" },
+              { value: "json", label: "JSON" },
+            ]}
+          />
+        }
+      />
 
       {mode === "form" ? (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className={styles.sections}>
           <Collapsible title="App Identity">
-            <div style={sectionHintStyle}>
+            <p className={styles.hint}>
               These values appear in installers and app metadata.
+            </p>
+            <div className={styles.rows}>
+              <Field label="App name">
+                <Input
+                  placeholder="My App"
+                  value={config?.productName || ""}
+                  onChange={(e) => setField(["productName"], e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Bundle ID"
+                help="Reverse-domain format, e.g. com.example.myapp"
+              >
+                <Input
+                  placeholder="com.example.myapp"
+                  value={config?.identifier || ""}
+                  onChange={(e) => setField(["identifier"], e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Version"
+                help="Use semantic versioning, like 1.0.0."
+              >
+                <Input
+                  placeholder="1.0.0"
+                  value={config?.version || ""}
+                  onChange={(e) => setField(["version"], e.target.value)}
+                />
+              </Field>
             </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>App name</label>
-              <Input
-                placeholder="My App"
-                value={config?.productName || ""}
-                onChange={(e) => setField(["productName"], e.target.value)}
-              />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Bundle ID</label>
-              <Input
-                placeholder="com.example.myapp"
-                value={config?.identifier || ""}
-                onChange={(e) => setField(["identifier"], e.target.value)}
-              />
-            </div>
-            <div style={helpStyle}>
-              Technical key: <code>identifier</code> (reverse-domain format).
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Version</label>
-              <Input
-                placeholder="1.0.0"
-                value={config?.version || ""}
-                onChange={(e) => setField(["version"], e.target.value)}
-              />
-            </div>
-            <div style={helpStyle}>Use semantic versioning, like 1.0.0.</div>
           </Collapsible>
 
-          <Collapsible title="Windows">
-            <div style={sectionHintStyle}>
+          <Collapsible title="Window">
+            <p className={styles.hint}>
               Controls the first app window users see.
+            </p>
+            <div className={styles.rows}>
+              <Field label="Window title">
+                <Input
+                  value={windows0?.title || ""}
+                  onChange={(e) => setWindowField("title", e.target.value)}
+                />
+              </Field>
+              <Field label="Width (px)">
+                <Input
+                  type="number"
+                  value={windows0?.width || 0}
+                  onChange={(e) =>
+                    setWindowField("width", Number(e.target.value))
+                  }
+                />
+              </Field>
+              <Field label="Height (px)">
+                <Input
+                  type="number"
+                  value={windows0?.height || 0}
+                  onChange={(e) =>
+                    setWindowField("height", Number(e.target.value))
+                  }
+                />
+              </Field>
             </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Window title</label>
-              <Input
-                value={windows0?.title || ""}
-                onChange={(e) => setWindowField("title", e.target.value)}
+            <div className={styles.checkRow}>
+              <Checkbox
+                label="Allow resize"
+                checked={!!windows0?.resizable}
+                onChange={(e) => setWindowField("resizable", e.target.checked)}
               />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Width (px)</label>
-              <Input
-                type="number"
-                value={windows0?.width || 0}
+              <Checkbox
+                label="Start fullscreen"
+                checked={!!windows0?.fullscreen}
+                onChange={(e) => setWindowField("fullscreen", e.target.checked)}
+              />
+              <Checkbox
+                label="Show frame controls"
+                checked={!!windows0?.decorations}
                 onChange={(e) =>
-                  setWindowField("width", Number(e.target.value))
+                  setWindowField("decorations", e.target.checked)
                 }
               />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Height (px)</label>
-              <Input
-                type="number"
-                value={windows0?.height || 0}
-                onChange={(e) =>
-                  setWindowField("height", Number(e.target.value))
-                }
-              />
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                flexWrap: "wrap",
-                marginTop: 6,
-              }}
-            >
-              <label>
-                <Checkbox
-                  checked={!!windows0?.resizable}
-                  onChange={(e) =>
-                    setWindowField("resizable", e.target.checked)
-                  }
-                />{" "}
-                Allow resize
-              </label>
-              <label>
-                <Checkbox
-                  checked={!!windows0?.fullscreen}
-                  onChange={(e) =>
-                    setWindowField("fullscreen", e.target.checked)
-                  }
-                />{" "}
-                Start fullscreen
-              </label>
-              <label>
-                <Checkbox
-                  checked={!!windows0?.decorations}
-                  onChange={(e) =>
-                    setWindowField("decorations", e.target.checked)
-                  }
-                />{" "}
-                Show frame controls
-              </label>
             </div>
           </Collapsible>
 
           <Collapsible title="Build">
-            <div style={sectionHintStyle}>
+            <p className={styles.hint}>
               How Forge runs your app in development and production builds.
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Dev URL</label>
-              <Input
-                placeholder="http://localhost:3000"
-                value={build?.devUrl || ""}
-                onChange={(e) => setField(["build", "devUrl"], e.target.value)}
-              />
-            </div>
-            <div style={helpStyle}>
-              Where your frontend dev server runs (<code>build.devUrl</code>).
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Built frontend folder</label>
-              <Input
-                placeholder="../dist"
-                value={build?.frontendDist || ""}
-                onChange={(e) =>
-                  setField(["build", "frontendDist"], e.target.value)
-                }
-              />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Before dev command</label>
-              <Input
-                value={build?.beforeDevCommand || ""}
-                onChange={(e) =>
-                  setField(["build", "beforeDevCommand"], e.target.value)
-                }
-              />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Before build command</label>
-              <Input
-                value={build?.beforeBuildCommand || ""}
-                onChange={(e) =>
-                  setField(["build", "beforeBuildCommand"], e.target.value)
-                }
-              />
+            </p>
+            <div className={styles.rows}>
+              <Field
+                label="Dev URL"
+                help="Where your frontend dev server runs (build.devUrl)."
+              >
+                <Input
+                  placeholder="http://localhost:3000"
+                  value={build?.devUrl || ""}
+                  onChange={(e) =>
+                    setField(["build", "devUrl"], e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Built frontend folder">
+                <Input
+                  placeholder="../dist"
+                  value={build?.frontendDist || ""}
+                  onChange={(e) =>
+                    setField(["build", "frontendDist"], e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Before dev command">
+                <Input
+                  value={build?.beforeDevCommand || ""}
+                  onChange={(e) =>
+                    setField(["build", "beforeDevCommand"], e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Before build command">
+                <Input
+                  value={build?.beforeBuildCommand || ""}
+                  onChange={(e) =>
+                    setField(["build", "beforeBuildCommand"], e.target.value)
+                  }
+                />
+              </Field>
             </div>
           </Collapsible>
 
           <Collapsible title="Bundle">
-            <div style={sectionHintStyle}>
-              Installer and app-store metadata.
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Icon path(s)</label>
-              <Input
-                value={
-                  Array.isArray(bundle?.icon)
-                    ? bundle.icon.join(",")
-                    : bundle?.icon || ""
-                }
-                onChange={(e) => setField(["bundle", "icon"], e.target.value)}
-              />
-            </div>
-            <div style={helpStyle}>
-              Use comma-separated paths for multiple icons.
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Copyright</label>
-              <Input
-                value={bundle?.copyright || ""}
-                onChange={(e) =>
-                  setField(["bundle", "copyright"], e.target.value)
-                }
-              />
-            </div>
-            <div style={rowStyle}>
-              <label style={labelStyle}>Category</label>
-              <Select
-                value={bundle?.category || ""}
-                onChange={(e) =>
-                  setField(["bundle", "category"], e.target.value)
-                }
+            <p className={styles.hint}>Installer and app-store metadata.</p>
+            <div className={styles.rows}>
+              <Field
+                label="Icon path(s)"
+                help="Use comma-separated paths for multiple icons."
               >
-                <option value="">Select category</option>
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
+                <Input
+                  value={
+                    Array.isArray(bundle?.icon)
+                      ? bundle.icon.join(",")
+                      : bundle?.icon || ""
+                  }
+                  onChange={(e) => setField(["bundle", "icon"], e.target.value)}
+                />
+              </Field>
+              <Field label="Copyright">
+                <Input
+                  value={bundle?.copyright || ""}
+                  onChange={(e) =>
+                    setField(["bundle", "copyright"], e.target.value)
+                  }
+                />
+              </Field>
+              <Field label="Category">
+                <Select
+                  value={bundle?.category || ""}
+                  onChange={(e) =>
+                    setField(["bundle", "category"], e.target.value)
+                  }
+                >
+                  <option value="">Select category</option>
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
             </div>
-            <div style={{ ...labelStyle, marginBottom: 8 }}>
-              Installer targets
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-              {(["dmg", "appimage", "deb", "nsis", "msi"] as const).map(
-                (target) => (
-                  <label key={target}>
-                    <Checkbox
-                      checked={
-                        Array.isArray(bundle?.targets) &&
-                        bundle.targets.includes(target)
-                      }
-                      onChange={(e) => {
-                        const current = Array.isArray(bundle?.targets)
-                          ? [...bundle.targets]
-                          : []
-                        const next = e.target.checked
-                          ? current.includes(target)
-                            ? current
-                            : [...current, target]
-                          : current.filter((t: string) => t !== target)
-                        setField(["bundle", "targets"], next)
-                      }}
-                    />{" "}
-                    {target}
-                  </label>
-                )
-              )}
+            <div className={styles.subLabel}>Installer targets</div>
+            <div className={styles.checkRow}>
+              {BUNDLE_TARGETS.map((target) => (
+                <Checkbox
+                  key={target}
+                  label={target}
+                  checked={
+                    Array.isArray(bundle?.targets) &&
+                    bundle.targets.includes(target)
+                  }
+                  onChange={(e) => {
+                    const current = Array.isArray(bundle?.targets)
+                      ? [...bundle.targets]
+                      : []
+                    const next = e.target.checked
+                      ? current.includes(target)
+                        ? current
+                        : [...current, target]
+                      : current.filter((t: string) => t !== target)
+                    setField(["bundle", "targets"], next)
+                  }}
+                />
+              ))}
             </div>
           </Collapsible>
         </div>
       ) : (
-        <textarea
-          value={rawJson}
-          onChange={(e) => onRawJsonChange(e.target.value)}
-          style={{ width: "100%", minHeight: 520, fontFamily: "monospace" }}
-        />
+        <div className={styles.jsonWrap}>
+          {jsonError && <Banner tone="danger">{jsonError}</Banner>}
+          <textarea
+            className={styles.textarea}
+            value={rawJson}
+            onChange={(e) => onRawJsonChange(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
       )}
 
-      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <Button onClick={useRecommendedDefaults}>
+      {issues.length > 0 && (
+        <div className={styles.issues}>
+          <Banner tone="warning" title="Validation issues">
+            <ul className={styles.issueList}>
+              {issues.map((issue, idx) => (
+                <li key={idx}>{issue}</li>
+              ))}
+            </ul>
+          </Banner>
+        </div>
+      )}
+
+      <div className={styles.actions}>
+        <Button variant="ghost" onClick={useRecommendedDefaults}>
           Use Recommended Defaults
         </Button>
-        <Button onClick={handleSave}>Save</Button>
-        <Button onClick={handleValidate}>Validate</Button>
-        <Button onClick={() => void loadConfig()}>Reset</Button>
+        <Button variant="secondary" onClick={handleValidate}>
+          Validate
+        </Button>
+        <Button variant="ghost" onClick={() => void loadConfig()}>
+          Reset
+        </Button>
+        <Button variant="primary" onClick={requestSave} disabled={!!jsonError}>
+          Save
+          {changes.length > 0 ? ` (${changes.length})` : ""}
+        </Button>
       </div>
 
-      {message && (
-        <p
-          style={{
-            marginTop: 12,
-            color: message.toLowerCase().includes("failed")
-              ? "#ff8f8f"
-              : "#9be6b4",
-          }}
-        >
-          {message}
-        </p>
-      )}
-      {issues.length > 0 && (
-        <ul style={{ marginTop: 8 }}>
-          {issues.map((issue, idx) => (
-            <li key={idx}>{issue}</li>
-          ))}
-        </ul>
-      )}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Review changes"
+        confirmLabel="Save changes"
+        loading={saving}
+        onConfirm={handleSave}
+        onCancel={() => setConfirmOpen(false)}
+        message={
+          <div>
+            <p className={styles.confirmIntro}>
+              {changes.length} field(s) will be written to tauri.conf.json. A
+              backup (.bak) is created automatically.
+            </p>
+            <ul className={styles.diffList}>
+              {changes.map((c) => (
+                <li key={c.path} className={styles.diffRow}>
+                  <code className={styles.diffPath}>{c.path}</code>
+                  <span className={styles.diffBefore}>{format(c.before)}</span>
+                  <span className={styles.diffArrow}>→</span>
+                  <span className={styles.diffAfter}>{format(c.after)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        }
+      />
     </div>
   )
+}
+
+function format(value: unknown): string {
+  if (value === undefined) return "—"
+  if (typeof value === "string") return value || '""'
+  return JSON.stringify(value)
 }

@@ -36,7 +36,6 @@ export interface BuildPreset {
   steps: BuildStep[]
 }
 
-
 export interface LicenseStatus {
   tier: "free" | "pro" | "team"
   valid: boolean
@@ -59,7 +58,9 @@ export interface BuildRecord {
 export async function registerProject(path: string): Promise<ProjectMeta> {
   return invoke("register_project", { path })
 }
-export async function getProjects(workspaceId?: string): Promise<ProjectMeta[]> {
+export async function getProjects(
+  workspaceId?: string
+): Promise<ProjectMeta[]> {
   return invoke("get_projects", { workspaceId })
 }
 export async function detectTauriStatus(path: string): Promise<any> {
@@ -71,16 +72,25 @@ export async function scanDirectory(path: string): Promise<ProjectMeta[]> {
 export async function readConfig(projectPath: string): Promise<any> {
   return invoke("read_config", { projectPath })
 }
-export async function writeConfig(projectPath: string, config: any): Promise<void> {
+export async function writeConfig(
+  projectPath: string,
+  config: any
+): Promise<void> {
   return invoke("write_config", { projectPath, config })
 }
-export async function validateConfig(projectPath: string, config: any): Promise<string[]> {
+export async function validateConfig(
+  projectPath: string,
+  config: any
+): Promise<string[]> {
   return invoke("validate_config", { projectPath, config })
 }
 export async function runDev(projectPath: string): Promise<number> {
   return invoke("run_dev", { projectPath })
 }
-export async function runBuild(projectPath: string, targets: string[]): Promise<any> {
+export async function runBuild(
+  projectPath: string,
+  targets: string[]
+): Promise<any> {
   return invoke("run_build", { projectPath, targets })
 }
 export async function killProcess(processId: string): Promise<void> {
@@ -114,7 +124,11 @@ export async function getWorkspaces(): Promise<Workspace[]> {
   return invoke("get_workspaces")
 }
 
-export async function updateWorkspace(id: string, name?: string, color?: string): Promise<Workspace> {
+export async function updateWorkspace(
+  id: string,
+  name?: string,
+  color?: string
+): Promise<Workspace> {
   return invoke("update_workspace", { id, name, color })
 }
 
@@ -122,11 +136,17 @@ export async function deleteWorkspace(id: string): Promise<void> {
   return invoke("delete_workspace", { id })
 }
 
-export async function addProjectToWorkspace(workspaceId: string, projectId: string): Promise<void> {
+export async function addProjectToWorkspace(
+  workspaceId: string,
+  projectId: string
+): Promise<void> {
   return invoke("add_project_to_workspace", { workspaceId, projectId })
 }
 
-export async function removeProjectFromWorkspace(workspaceId: string, projectId: string): Promise<void> {
+export async function removeProjectFromWorkspace(
+  workspaceId: string,
+  projectId: string
+): Promise<void> {
   return invoke("remove_project_from_workspace", { workspaceId, projectId })
 }
 
@@ -134,7 +154,9 @@ export async function saveBuildPreset(preset: BuildPreset): Promise<void> {
   return invoke("save_build_preset", { preset })
 }
 
-export async function getBuildPresets(workspaceId: string): Promise<BuildPreset[]> {
+export async function getBuildPresets(
+  workspaceId: string
+): Promise<BuildPreset[]> {
   return invoke("get_build_presets", { workspaceId })
 }
 
@@ -142,14 +164,16 @@ export async function runBuildPreset(presetId: string): Promise<any> {
   return invoke("run_build_preset", { presetId })
 }
 
-export async function getBuildHistory(projectId?: string, limit: number = 10): Promise<BuildRecord[]> {
+export async function getBuildHistory(
+  projectId?: string,
+  limit: number = 10
+): Promise<BuildRecord[]> {
   return invoke("get_build_history", { projectId, limit })
 }
 
 export async function getDeployStatus(workspaceId: string): Promise<any> {
   return invoke("get_deploy_status", { workspaceId })
 }
-
 
 export async function validateLicense(key: string): Promise<LicenseStatus> {
   return invoke("validate_license", { key })

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useSnackbar } from "notistack"
 import {
   addProjectToWorkspace,
   createWorkspace,
@@ -10,6 +11,12 @@ import {
 import { isFeatureAvailable } from "../lib/tier"
 import { useAppState } from "../providers/AppStateProvider"
 import LicenseGate from "./LicenseGate"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card } from "./ui/card"
+import { Input } from "./ui/input"
+import { Select } from "./ui/select"
+import styles from "./WorkspaceView.module.scss"
 
 export default function WorkspaceView({
   onSelectProject,
@@ -19,11 +26,12 @@ export default function WorkspaceView({
   onWorkspaceChange?: (workspaceId: string) => void
 }) {
   const { tier } = useAppState()
+  const { enqueueSnackbar } = useSnackbar()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [activeWorkspace, setActiveWorkspace] = useState<string>("all")
   const [newName, setNewName] = useState("")
-  const [newColor, setNewColor] = useState("#64748b")
+  const [newColor, setNewColor] = useState("#f5853f")
 
   const refresh = async () => {
     const [ws, ps] = await Promise.all([getWorkspaces(), getProjects()])
@@ -37,11 +45,22 @@ export default function WorkspaceView({
 
   const create = async () => {
     if (!newName.trim()) return
-    const ws = await createWorkspace(newName.trim())
-    await Promise.resolve(ws)
-    setNewName("")
-    setNewColor("#64748b")
-    await refresh()
+    try {
+      await createWorkspace(newName.trim())
+      setNewName("")
+      setNewColor("#f5853f")
+      await refresh()
+      enqueueSnackbar("Workspace created", { variant: "success" })
+    } catch (e: any) {
+      enqueueSnackbar(`Could not create workspace: ${e?.message || e}`, {
+        variant: "error",
+      })
+    }
+  }
+
+  const selectWorkspace = (id: string) => {
+    setActiveWorkspace(id)
+    onWorkspaceChange?.(id)
   }
 
   const filtered =
@@ -49,77 +68,130 @@ export default function WorkspaceView({
       ? projects
       : projects.filter((p) => p.workspace_id === activeWorkspace)
 
+  const canManageWorkspaces = isFeatureAvailable("workspaces", tier)
+
+  const workspaceForm = (
+    <div className={styles.createRow}>
+      <Input
+        placeholder="New workspace name"
+        value={newName}
+        disabled={!canManageWorkspaces}
+        onChange={(e) => setNewName(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && create()}
+      />
+      <input
+        type="color"
+        className={styles.colorInput}
+        value={newColor}
+        disabled={!canManageWorkspaces}
+        onChange={(e) => setNewColor(e.target.value)}
+      />
+      <Button
+        variant="secondary"
+        onClick={create}
+        disabled={!canManageWorkspaces || !newName.trim()}
+      >
+        Add
+      </Button>
+    </div>
+  )
+
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
-          style={{ fontWeight: activeWorkspace === "all" ? 700 : 400 }}
-          onClick={() => {
-            setActiveWorkspace("all")
-            onWorkspaceChange?.("all")
-          }}
-        >
-          All Projects
-        </button>
-        {workspaces.map((ws) => (
+    <div className={styles.root}>
+      <div className={styles.toolbar}>
+        <div className={styles.pills}>
           <button
-            key={ws.id}
-            style={{
-              fontWeight: activeWorkspace === ws.id ? 700 : 400,
-              borderColor: ws.color || "#666",
-            }}
-            onClick={() => {
-              setActiveWorkspace(ws.id)
-              onWorkspaceChange?.(ws.id)
-            }}
+            className={[
+              styles.pill,
+              activeWorkspace === "all" ? styles.pillActive : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={() => selectWorkspace("all")}
           >
-            {ws.name}
+            All Projects
           </button>
-        ))}
+          {workspaces.map((ws) => (
+            <button
+              key={ws.id}
+              className={[
+                styles.pill,
+                activeWorkspace === ws.id ? styles.pillActive : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={{
+                borderColor:
+                  activeWorkspace === ws.id ? ws.color || undefined : undefined,
+              }}
+              onClick={() => selectWorkspace(ws.id)}
+            >
+              <span
+                className={styles.dot}
+                style={{ background: ws.color || "var(--color-text-subtle)" }}
+              />
+              {ws.name}
+            </button>
+          ))}
+        </div>
+
+        {canManageWorkspaces ? (
+          workspaceForm
+        ) : (
+          <LicenseGate
+            feature="workspaces"
+            description="Workspace creation is a Forge Pro feature."
+          >
+            {workspaceForm}
+          </LicenseGate>
+        )}
       </div>
 
-      {isFeatureAvailable("workspaces", tier) ? (
-        <div style={{ display: "flex", gap: 8 }}>
-          <input placeholder="New workspace" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
-          <button onClick={create}>New Workspace</button>
-        </div>
-      ) : (
-        <LicenseGate feature="workspaces" description="Workspace creation is a Forge Pro feature.">
-          <div style={{ display: "flex", gap: 8 }}>
-            <input placeholder="New workspace" disabled value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <input type="color" disabled value={newColor} onChange={(e) => setNewColor(e.target.value)} />
-            <button disabled onClick={create}>New Workspace</button>
-          </div>
-        </LicenseGate>
-      )}
-
-      <div style={{ display: "grid", gap: 8 }}>
+      <div className={styles.grid}>
         {filtered.map((project) => (
-          <div key={project.id} style={{ border: "1px solid #444", borderRadius: 8, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <strong onClick={() => onSelectProject(project)} style={{ cursor: "pointer" }}>
-                {project.name}
-              </strong>
-              <select
-                value={project.workspace_id || ""}
-                onChange={async (e) => {
-                  const next = e.target.value
-                  if (!next) return
-                  await addProjectToWorkspace(next, project.id)
-                  await refresh()
-                }}
+          <Card key={project.id} interactive padded={false}>
+            <div className={styles.cardBody}>
+              <button
+                className={styles.cardTitle}
+                onClick={() => onSelectProject(project)}
               >
-                <option value="">Add to Workspace</option>
-                {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.name}
-                  </option>
-                ))}
-              </select>
+                {project.name}
+              </button>
+              <div className={styles.cardPath} title={project.path}>
+                {project.path}
+              </div>
+              <div className={styles.cardMeta}>
+                {project.tauri_version && (
+                  <Badge tone="info">Tauri {project.tauri_version}</Badge>
+                )}
+                {project.git_branch && (
+                  <Badge tone="neutral">{project.git_branch}</Badge>
+                )}
+                {project.git_dirty && <Badge tone="warning">uncommitted</Badge>}
+              </div>
+              <div className={styles.cardFooter}>
+                <Select
+                  value={project.workspace_id || ""}
+                  onChange={async (e) => {
+                    const next = e.target.value
+                    if (!next) return
+                    await addProjectToWorkspace(next, project.id)
+                    await refresh()
+                  }}
+                >
+                  <option value="">Add to workspace…</option>
+                  {workspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </Select>
+                <Button size="sm" onClick={() => onSelectProject(project)}>
+                  Open
+                </Button>
+              </div>
             </div>
-            <div>{project.path}</div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

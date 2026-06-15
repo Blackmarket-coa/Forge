@@ -1,10 +1,35 @@
-import React from "react"
+import React, { useState } from "react"
+import styles from "./collapsible.module.scss"
 
-export function Collapsible({ title, children }: { title: string; children: React.ReactNode }) {
+export function Collapsible({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: React.ReactNode
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
-    <details open style={{ border: "1px solid #333", borderRadius: 8, padding: 12 }}>
-      <summary style={{ cursor: "pointer", fontWeight: 600 }}>{title}</summary>
-      <div style={{ marginTop: 12 }}>{children}</div>
-    </details>
+    <section className={styles.root}>
+      <button
+        type="button"
+        className={styles.header}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className={[styles.chevron, open ? styles.chevronOpen : ""]
+            .filter(Boolean)
+            .join(" ")}
+          aria-hidden
+        >
+          ▸
+        </span>
+        <span className={styles.title}>{title}</span>
+      </button>
+      {open && <div className={styles.body}>{children}</div>}
+    </section>
   )
 }

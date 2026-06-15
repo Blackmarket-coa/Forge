@@ -4,6 +4,7 @@ import { Terminal as XTerm } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import "@xterm/xterm/css/xterm.css"
+import styles from "./Terminal.module.scss"
 
 interface TerminalProps {
   processIdPrefix?: string
@@ -35,26 +36,32 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
 
     const unsubs: Array<() => void> = []
 
-    const addListener = async (event: string, handler: (payload: any) => void) => {
+    const matches = (id: string) =>
+      !processIdPrefix || id.includes(processIdPrefix)
+
+    const addListener = async (
+      event: string,
+      handler: (payload: any) => void
+    ) => {
       const unlisten = await listen(event, (e: any) => {
-        const payload: any = e.payload || {}
-        if (!processIdPrefix || String(payload.id || "").startsWith(processIdPrefix)) {
-          handler(payload)
-        }
+        handler(e.payload || {})
       })
       unsubs.push(unlisten)
     }
 
-    void addListener("process-stdout", (payload) => {
-      term.writeln(payload.line || "")
-    })
-
-    void addListener("process-stderr", (payload) => {
-      term.writeln(`\x1b[33m${payload.line || ""}\x1b[0m`)
+    // The backend emits a single "process-output" event carrying a stderr flag,
+    // plus a "process-exit" event when the process finishes.
+    void addListener("process-output", (payload) => {
+      if (!matches(String(payload.process_id || ""))) return
+      const text = payload.data || ""
+      term.writeln(payload.is_stderr ? `\x1b[33m${text}\x1b[0m` : text)
     })
 
     void addListener("process-exit", (payload) => {
-      term.writeln(`\x1b[31mProcess exited (id=${payload.id}) with code ${payload.code}\x1b[0m`)
+      if (!matches(String(payload.id || ""))) return
+      term.writeln(
+        `\x1b[31mProcess exited (id=${payload.id}) with code ${payload.code}\x1b[0m`
+      )
     })
 
     const onResize = () => fitAddon.fit()
@@ -68,12 +75,22 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
   }, [processIdPrefix])
 
   return (
-    <div style={{ border: "1px solid #333", borderRadius: 6 }}>
-      <div style={{ padding: 8, display: "flex", justifyContent: "space-between" }}>
-        <strong>Terminal</strong>
-        <button onClick={() => termRef.current?.clear()}>Clear</button>
+    <div className={styles.terminal}>
+      <div className={styles.header}>
+        <span className={styles.dots} aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className={styles.title}>Terminal</span>
+        <button
+          className={styles.clear}
+          onClick={() => termRef.current?.clear()}
+        >
+          Clear
+        </button>
       </div>
-      <div ref={containerRef} style={{ height: 260, padding: 4 }} />
+      <div ref={containerRef} className={styles.surface} />
     </div>
   )
 }

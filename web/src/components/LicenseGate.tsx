@@ -1,6 +1,10 @@
 import React, { useState } from "react"
+import { useSnackbar } from "notistack"
 import { useAppState } from "../providers/AppStateProvider"
 import { isFeatureAvailable } from "../lib/tier"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import styles from "./LicenseGate.module.scss"
 
 interface LicenseGateProps {
   feature: string
@@ -8,11 +12,15 @@ interface LicenseGateProps {
   children: React.ReactNode
 }
 
-export default function LicenseGate({ feature, description, children }: LicenseGateProps) {
+export default function LicenseGate({
+  feature,
+  description,
+  children,
+}: LicenseGateProps) {
   const { tier, activateLicense } = useAppState()
-  const [showDialog, setShowDialog] = useState(false)
+  const { enqueueSnackbar } = useSnackbar()
+  const [showInput, setShowInput] = useState(false)
   const [keyInput, setKeyInput] = useState("")
-  const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   if (isFeatureAvailable(feature, tier)) {
@@ -22,51 +30,59 @@ export default function LicenseGate({ feature, description, children }: LicenseG
   const onActivate = async () => {
     if (!keyInput.trim()) return
     setLoading(true)
-    setResult(null)
     try {
       const status = await activateLicense(keyInput.trim())
-      if (status.valid) {
-        setResult(`License activated. ${status.tier.toUpperCase()} unlocked.`)
-      } else {
-        setResult("License key is invalid.")
-      }
+      enqueueSnackbar(
+        status.valid
+          ? `${status.tier.toUpperCase()} unlocked`
+          : "License key is invalid",
+        { variant: status.valid ? "success" : "error" }
+      )
     } catch (error) {
-      setResult(error instanceof Error ? error.message : "Validation failed")
+      enqueueSnackbar(
+        error instanceof Error ? error.message : "Validation failed",
+        { variant: "error" }
+      )
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ position: "relative" }}>
-      <div style={{ filter: "blur(1px)", opacity: 0.4, pointerEvents: "none" }}>{children}</div>
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "grid",
-          placeItems: "center",
-          background: "rgba(12, 12, 12, 0.75)",
-          border: "1px solid #fb923c",
-          borderRadius: 8,
-          padding: 16,
-        }}
-      >
-        <div style={{ textAlign: "center", maxWidth: 520 }}>
-          <h3 style={{ marginTop: 0 }}>Upgrade to Forge Pro</h3>
-          <p>{description}</p>
-          <button onClick={() => setShowDialog((prev) => !prev)}>Enter License Key</button>
-          {showDialog && (
-            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-              <input
+    <div className={styles.gate}>
+      <div className={styles.locked} aria-hidden>
+        {children}
+      </div>
+      <div className={styles.overlay}>
+        <div className={styles.panel}>
+          <span className={styles.badge}>PRO</span>
+          <h3 className={styles.title}>Upgrade to Forge Pro</h3>
+          <p className={styles.description}>{description}</p>
+          {showInput ? (
+            <div className={styles.inputRow}>
+              <Input
                 placeholder="FORGE-XXXX-XXXX-XXXX"
                 value={keyInput}
-                onChange={(event) => setKeyInput(event.target.value)}
+                onChange={(e) => setKeyInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onActivate()}
               />
-              <button onClick={onActivate} disabled={loading}>
-                {loading ? "Activating..." : "Activate"}
-              </button>
-              {result && <p style={{ margin: 0 }}>{result}</p>}
+              <Button variant="primary" onClick={onActivate} loading={loading}>
+                Activate
+              </Button>
+            </div>
+          ) : (
+            <div className={styles.actions}>
+              <Button variant="primary" onClick={() => setShowInput(true)}>
+                Enter License Key
+              </Button>
+              <a
+                href="https://forge.dev/pricing"
+                target="_blank"
+                rel="noreferrer"
+                className={styles.link}
+              >
+                See plans
+              </a>
             </div>
           )}
         </div>

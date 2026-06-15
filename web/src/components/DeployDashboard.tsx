@@ -1,5 +1,28 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { getDeployStatus } from "../api/api"
+import { Badge, Tone } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card } from "./ui/card"
+import { EmptyState } from "./ui/empty-state"
+import { PageHeader } from "./ui/page-header"
+import { Progress } from "./ui/progress"
+import { Spinner } from "./ui/spinner"
+import styles from "./DeployDashboard.module.scss"
+
+const PLATFORMS = ["macOS", "Linux", "Windows", "iOS", "Android"]
+
+function statusView(value: string): { label: string; tone: Tone } {
+  switch (value) {
+    case "built":
+      return { label: "Built", tone: "success" }
+    case "configured":
+      return { label: "Configured", tone: "warning" }
+    case "not_started":
+      return { label: "Missing", tone: "danger" }
+    default:
+      return { label: "—", tone: "neutral" }
+  }
+}
 
 export default function DeployDashboard({
   workspaceId,
@@ -9,98 +32,149 @@ export default function DeployDashboard({
   onOpenProjectBuild: (projectId: string, platform: string) => void
 }) {
   const [status, setStatus] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!workspaceId || workspaceId === "all") return
+    setLoading(true)
     void (async () => {
-      const data = await getDeployStatus(workspaceId)
-      setStatus(data)
+      try {
+        setStatus(await getDeployStatus(workspaceId))
+      } finally {
+        setLoading(false)
+      }
     })()
   }, [workspaceId])
 
-  const progress = useMemo(() => Number(status?.overall_progress || 0), [status])
+  const progress = useMemo(
+    () => Number(status?.overall_progress || 0),
+    [status]
+  )
   const matrix = status?.matrix || []
   const blockers = status?.blockers || []
   const checklist = status?.checklist || []
-  const platforms = ["macOS", "Linux", "Windows", "iOS", "Android"]
 
-  const labelFor = (value: string) => {
-    if (value === "built") return { icon: "✓", label: "Built", color: "#16a34a" }
-    if (value === "configured") return { icon: "○", label: "Configured", color: "#f59e0b" }
-    if (value === "not_started") return { icon: "✗", label: "Missing config", color: "#dc2626" }
-    return { icon: "—", label: "Not targeted", color: "#6b7280" }
+  if (loading) {
+    return (
+      <div className={styles.loading}>
+        <Spinner size={20} /> Checking release readiness…
+      </div>
+    )
   }
 
   return (
-    <div style={{ border: "1px solid #444", borderRadius: 8, padding: 12, marginTop: 12 }}>
-      <h3>Deploy Dashboard</h3>
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ height: 10, background: "#222", borderRadius: 999 }}>
-          <div style={{ width: `${progress}%`, height: "100%", background: "#22c55e", borderRadius: 999 }} />
+    <div>
+      <PageHeader
+        title="Deploy readiness"
+        subtitle="Track how close each project is to shipping on every platform."
+      />
+
+      <Card>
+        <div className={styles.progressRow}>
+          <Progress value={progress} />
+          <span className={styles.progressLabel}>
+            {progress.toFixed(0)}% ready
+          </span>
         </div>
-        <div>{progress.toFixed(1)}% ready</div>
+      </Card>
+
+      <div className={styles.matrixCard}>
+        <Card title="Platform matrix" padded={false}>
+          {matrix.length === 0 ? (
+            <div className={styles.pad}>
+              <EmptyState
+                icon="🚀"
+                title="No projects in this workspace"
+                description="Add projects to the workspace to track deploy readiness."
+              />
+            </div>
+          ) : (
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  {PLATFORMS.map((p) => (
+                    <th key={p}>{p}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.map((row: any) => (
+                  <tr key={row.project_id}>
+                    <td className={styles.projectCell}>{row.project_name}</td>
+                    {PLATFORMS.map((p) => {
+                      const view = statusView(
+                        row?.statuses?.[p] || "not_targeted"
+                      )
+                      return (
+                        <td key={p}>
+                          <button
+                            className={styles.cell}
+                            onClick={() =>
+                              onOpenProjectBuild(row.project_id, p)
+                            }
+                          >
+                            <Badge tone={view.tone} dot>
+                              {view.label}
+                            </Badge>
+                          </button>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       </div>
 
-      <table style={{ width: "100%", marginBottom: 12 }}>
-        <thead>
-          <tr>
-            <th>Project</th>
-            {platforms.map((p) => (
-              <th key={p}>{p}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {matrix.map((row: any) => (
-            <tr key={row.project_id}>
-              <td>{row.project_name}</td>
-              {platforms.map((p) => {
-                const view = labelFor(row?.statuses?.[p] || "not_targeted")
-                return (
-                  <td key={p}>
-                    <button
-                      onClick={() => onOpenProjectBuild(row.project_id, p)}
-                      style={{ color: view.color, border: "none", background: "transparent", cursor: "pointer" }}
-                    >
-                      {view.icon} {view.label}
-                    </button>
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <h4>Checklist</h4>
-          <ul>
-            {checklist.map((item: any, idx: number) => {
-              const init = item.tauri_initialized ? "✓" : "✗"
-              const cfg = item.config_ok ? "✓" : "○"
-              return (
-                <li key={idx}>
-                  {init} Tauri initialized — {item.project}; {cfg} config status
+      <div className={styles.columns}>
+        <Card title="Checklist">
+          {checklist.length === 0 ? (
+            <p className={styles.muted}>Nothing to check yet.</p>
+          ) : (
+            <ul className={styles.list}>
+              {checklist.map((item: any, idx: number) => (
+                <li key={idx} className={styles.listRow}>
+                  <Badge
+                    tone={item.tauri_initialized ? "success" : "danger"}
+                    dot
+                  >
+                    {item.tauri_initialized ? "Init" : "No init"}
+                  </Badge>
+                  <span>{item.project}</span>
+                  <Badge tone={item.config_ok ? "success" : "warning"}>
+                    {item.config_ok ? "config ok" : "config needs review"}
+                  </Badge>
                 </li>
-              )
-            })}
-          </ul>
-        </div>
+              ))}
+            </ul>
+          )}
+        </Card>
 
-        <div>
-          <h4>Blockers</h4>
-          <ul>
-            {blockers.map((b: any, idx: number) => (
-              <li key={idx}>
-                ⚠️ {b.message}
-                {b.affected_project ? ` — ${b.affected_project}` : ""}
-                {b.fix_hint ? <div style={{ opacity: 0.8 }}>Fix: {b.fix_hint}</div> : null}
-                {String(b.message).includes("tauri.conf.json") && <button>Open Config Editor</button>}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card title="Blockers">
+          {blockers.length === 0 ? (
+            <p className={styles.muted}>
+              No blockers. You're clear to ship. 🎉
+            </p>
+          ) : (
+            <ul className={styles.list}>
+              {blockers.map((b: any, idx: number) => (
+                <li key={idx} className={styles.blocker}>
+                  <div className={styles.blockerMsg}>
+                    <span className={styles.warnIcon}>⚠️</span>
+                    {b.message}
+                    {b.affected_project ? ` — ${b.affected_project}` : ""}
+                  </div>
+                  {b.fix_hint && (
+                    <div className={styles.fixHint}>Fix: {b.fix_hint}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     </div>
   )
