@@ -20,6 +20,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Blackmarket-coa/Forge/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgzMDdFQjVERjUxQ0MzN0UKUldSK3d4ejFYZXNIZzdKZHlCRDFZS1l2MmJlY21SL29qNmRLRGYxZm1DY1A1RTlDRlRQOElEdG4K"
+    }
   }
 }

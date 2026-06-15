@@ -151,6 +151,27 @@ cargo test
 Create and push a semantic tag like `v0.1.0` to trigger the cross-platform
 release workflow. Releases are created as **drafts** by default.
 
+### Auto-updater
+
+Forge ships with the Tauri updater. Built apps check
+`https://github.com/<owner>/Forge/releases/latest/download/latest.json` and can
+self-update from signed releases (see **Settings → Updates**).
+
+Updater artifacts must be signed. Generate a keypair once:
+
+```bash
+cargo tauri signer generate -w ~/.forge-updater.key
+```
+
+The **public** key goes in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
+Store the **private** key and its password as repository secrets so the release
+workflow can sign updates:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Keep the private key out of source control.
+
 ## Notes
 
 The frontend ships a custom, themeable design system (`web/src/components/ui/`)

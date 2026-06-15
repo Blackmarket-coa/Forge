@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { useSnackbar } from "notistack"
 import { useAppState } from "../providers/AppStateProvider"
 import EnvironmentCheck from "./EnvironmentCheck"
+import UpdateChecker from "./UpdateChecker"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
@@ -118,6 +119,13 @@ export default function Settings() {
           subtitle="Forge builds run locally and need these tools installed."
         >
           <EnvironmentCheck />
+        </Card>
+
+        <Card
+          title="Updates"
+          subtitle="Forge can update itself from signed releases."
+        >
+          <UpdateChecker />
         </Card>
 
         <Card title="About">
