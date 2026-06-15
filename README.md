@@ -103,6 +103,29 @@ Artifacts are generated under `src-tauri/target/`.
 - **Port already in use (dev server)**: stop the existing process or set a new
   port for the frontend dev server.
 
+## Testing & quality
+
+Forge has frontend and backend test suites, gated in CI on every push and pull
+request (`.github/workflows/ci.yml`).
+
+Frontend (`web/`):
+
+```bash
+yarn check                 # prettier + tsc + eslint
+yarn test --watchAll=false # unit tests
+```
+
+Backend (`src-tauri/`):
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+> Building the desktop backend on Linux requires the Tauri system packages
+> (WebKitGTK, GTK, etc.). See the release workflow for the exact package list.
+
 ## License/tier behavior (current)
 
 - Free tier limits project count and gates selected premium features.
@@ -117,5 +140,7 @@ release workflow. Releases are created as **drafts** by default.
 
 ## Notes
 
-This README reflects the current scaffold and will evolve as Forge moves from
-baseline implementation to production-ready behavior.
+The frontend ships a custom, themeable design system (`web/src/components/ui/`)
+and an application shell with sidebar navigation, onboarding, and toast
+feedback. Backend file writes are atomic and spawned build/dev processes are
+shut down gracefully.

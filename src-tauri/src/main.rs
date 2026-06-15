@@ -1,5 +1,8 @@
 fn main() {
-    env_logger::init();
+    // Default to a sensible log level so operator-facing diagnostics are
+    // visible out of the box; RUST_LOG still overrides this when set.
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("forge=info,warn"))
+        .init();
 
     // Initialise Sentry before anything else so that panics and errors during
     // startup are captured.  When SENTRY_DSN is unset this is a no-op.
