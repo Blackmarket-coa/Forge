@@ -1,0 +1,42 @@
+.root {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.header:hover {
+  background: var(--color-surface-hover);
+}
+
+.chevron {
+  display: inline-block;
+  color: var(--color-text-subtle);
+  transition: transform 0.15s ease;
+  font-size: 12px;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.body {
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--color-border);
+}

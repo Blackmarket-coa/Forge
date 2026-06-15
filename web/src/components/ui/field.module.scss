@@ -1,0 +1,15 @@
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.help {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useSnackbar } from "notistack"
 import {
   BuildPreset,
   getBuildPresets,
@@ -7,19 +8,29 @@ import {
   runBuildPreset,
   saveBuildPreset,
 } from "../api/api"
-import Terminal from "./Terminal"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card } from "./ui/card"
+import { Checkbox } from "./ui/checkbox"
+import { EmptyState } from "./ui/empty-state"
+import { Field } from "./ui/field"
+import { Input } from "./ui/input"
+import { Select } from "./ui/select"
+import styles from "./BuildOrchestrator.module.scss"
 
 export default function BuildOrchestrator({
   workspaceId,
 }: {
   workspaceId: string
 }) {
+  const { enqueueSnackbar } = useSnackbar()
   const [presets, setPresets] = useState<BuildPreset[]>([])
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [name, setName] = useState("")
   const [selectedProject, setSelectedProject] = useState("")
   const [targets, setTargets] = useState<string[]>(["appimage"])
   const [parallelWithNext, setParallelWithNext] = useState(false)
+  const [running, setRunning] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<any[]>([])
 
   const refresh = async () => {
@@ -33,56 +44,74 @@ export default function BuildOrchestrator({
 
   useEffect(() => {
     if (workspaceId) void refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId])
 
   const createPreset = async () => {
     if (!name || !selectedProject) return
-    const preset: BuildPreset = {
-      id: "",
-      name,
-      workspace_id: workspaceId,
-      steps: [
-        {
-          project_id: selectedProject,
-          targets,
-          parallel_with_next: parallelWithNext,
-        },
-      ],
+    try {
+      await saveBuildPreset({
+        id: "",
+        name,
+        workspace_id: workspaceId,
+        steps: [
+          {
+            project_id: selectedProject,
+            targets,
+            parallel_with_next: parallelWithNext,
+          },
+        ],
+      })
+      setName("")
+      await refresh()
+      enqueueSnackbar("Preset saved", { variant: "success" })
+    } catch (e: any) {
+      enqueueSnackbar(`Could not save preset: ${e?.message || e}`, {
+        variant: "error",
+      })
     }
-    await saveBuildPreset(preset)
-    setName("")
-    await refresh()
   }
 
   const runPreset = async (presetId: string) => {
-    const result = await runBuildPreset(presetId)
-    setTimeline(result?.timeline || [])
+    setRunning(presetId)
+    try {
+      const result = await runBuildPreset(presetId)
+      setTimeline(result?.timeline || [])
+      enqueueSnackbar("Preset finished", { variant: "success" })
+    } catch (e: any) {
+      enqueueSnackbar(`Preset run failed: ${e?.message || e}`, {
+        variant: "error",
+      })
+    } finally {
+      setRunning(null)
+    }
   }
 
   return (
-    <div style={{ border: "1px solid #444", borderRadius: 8, padding: 12 }}>
-      <h3>Build Orchestrator</h3>
-
-      <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-        <input
-          placeholder="Preset name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <select
-          value={selectedProject}
-          onChange={(e) => setSelectedProject(e.target.value)}
-        >
-          <option value="">Select Project</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <label>
-          Targets (comma-separated)
-          <input
+    <Card title="Build orchestration" subtitle="Run multi-project builds.">
+      <div className={styles.form}>
+        <Field label="Preset name">
+          <Input
+            placeholder="Release all"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+        <Field label="Project">
+          <Select
+            value={selectedProject}
+            onChange={(e) => setSelectedProject(e.target.value)}
+          >
+            <option value="">Select project</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Targets" help="Comma-separated bundle targets.">
+          <Input
             value={targets.join(",")}
             onChange={(e) =>
               setTargets(
@@ -93,49 +122,68 @@ export default function BuildOrchestrator({
               )
             }
           />
-        </label>
-        <label>
-          <input
-            type="checkbox"
+        </Field>
+        <div className={styles.formFooter}>
+          <Checkbox
+            label="Run parallel with next step"
             checked={parallelWithNext}
             onChange={(e) => setParallelWithNext(e.target.checked)}
           />
-          parallel with next
-        </label>
-        <button onClick={createPreset}>New Preset</button>
+          <Button
+            variant="secondary"
+            onClick={createPreset}
+            disabled={!name || !selectedProject}
+          >
+            Add preset
+          </Button>
+        </div>
       </div>
 
-      <ul>
-        {presets.map((preset) => (
-          <li key={preset.id}>
-            <strong>{preset.name}</strong> ({preset.steps.length} step(s))
-            <button
-              onClick={() => runPreset(preset.id)}
-              style={{ marginLeft: 8 }}
-            >
-              Run Preset
-            </button>
-          </li>
-        ))}
-      </ul>
+      {presets.length === 0 ? (
+        <EmptyState
+          icon="🧩"
+          title="No presets yet"
+          description="Create a preset to orchestrate builds across this workspace."
+        />
+      ) : (
+        <ul className={styles.presets}>
+          {presets.map((preset) => (
+            <li key={preset.id} className={styles.presetRow}>
+              <div>
+                <strong>{preset.name}</strong>
+                <Badge tone="neutral">{preset.steps.length} step(s)</Badge>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                loading={running === preset.id}
+                onClick={() => runPreset(preset.id)}
+              >
+                Run
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {timeline.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <h4>Timeline</h4>
-          <ol>
+        <div className={styles.timeline}>
+          <div className={styles.subLabel}>Timeline</div>
+          <ol className={styles.timelineList}>
             {timeline.map((step, idx) => (
               <li key={idx}>
-                status={step.status}, duration={step.duration_secs}s
+                <Badge
+                  tone={step.status === "success" ? "success" : "danger"}
+                  dot
+                >
+                  {step.status}
+                </Badge>
+                <span className={styles.muted}>{step.duration_secs}s</span>
               </li>
             ))}
           </ol>
         </div>
       )}
-
-      <details>
-        <summary>Terminal</summary>
-        <Terminal />
-      </details>
-    </div>
+    </Card>
   )
 }

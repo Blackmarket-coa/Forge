@@ -1,4 +1,5 @@
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
+import AppShell, { NavItem } from "./components/AppShell"
 import ConfigEditor from "./components/ConfigEditor"
 import CreateProjectForm from "./components/CreateProjectForm"
 import DeployDashboard from "./components/DeployDashboard"
@@ -7,10 +8,12 @@ import LicenseGate from "./components/LicenseGate"
 import ProjectView from "./components/ProjectView"
 import Settings from "./components/Settings"
 import { getProjects, ProjectMeta } from "./api/api"
+import { useAppState } from "./providers/AppStateProvider"
 
 type View = "landing" | "project" | "config" | "settings" | "create" | "deploy"
 
 export default function App() {
+  const { theme, toggleTheme, tier } = useAppState()
   const [activeProject, setActiveProject] = useState<ProjectMeta | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<string>("all")
   const [view, setView] = useState<View>("landing")
@@ -31,23 +34,41 @@ export default function App() {
     if (project) openProject(project)
   }
 
-  return (
-    <div>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          padding: 12,
-          gap: 8,
-        }}
-      >
-        <button onClick={() => setView("landing")}>Home</button>
-        {activeWorkspace !== "all" && (
-          <button onClick={() => setView("deploy")}>Deploy</button>
-        )}
-        <button onClick={() => setView("settings")}>Settings</button>
-      </header>
+  const hasWorkspace = activeWorkspace !== "all"
 
+  const nav: NavItem[] = useMemo(
+    () => [
+      { id: "projects", label: "Projects", icon: "📁" },
+      {
+        id: "deploy",
+        label: "Deploy",
+        icon: "🚀",
+        disabled: !hasWorkspace,
+        hint: "Select a workspace to view deploy readiness",
+      },
+      { id: "settings", label: "Settings", icon: "⚙️" },
+    ],
+    [hasWorkspace]
+  )
+
+  const activeNav =
+    view === "deploy" ? "deploy" : view === "settings" ? "settings" : "projects"
+
+  const onNavigate = (id: string) => {
+    if (id === "projects") setView("landing")
+    else if (id === "deploy" && hasWorkspace) setView("deploy")
+    else if (id === "settings") setView("settings")
+  }
+
+  return (
+    <AppShell
+      nav={nav}
+      activeNav={activeNav}
+      onNavigate={onNavigate}
+      tier={tier}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
       {view === "landing" && (
         <LandingScreen
           onSelectProject={openProject}
@@ -55,25 +76,27 @@ export default function App() {
           onWorkspaceActive={(id) => setActiveWorkspace(id)}
         />
       )}
+
       {view === "settings" && <Settings />}
+
       {view === "create" && (
         <CreateProjectForm
           onCreated={handleCreated}
           onCancel={() => setView("landing")}
         />
       )}
-      {view === "deploy" && activeWorkspace !== "all" && (
+
+      {view === "deploy" && hasWorkspace && (
         <LicenseGate
           feature="deploy_dashboard"
           description="Deploy dashboards and release readiness tracking are available on Forge Pro."
         >
           <DeployDashboard
             workspaceId={activeWorkspace}
-            onOpenProjectBuild={(projectId, platform) => {
+            onOpenProjectBuild={(projectId) => {
               void (async () => {
                 await openProjectById(projectId)
                 setView("project")
-                void platform
               })()
             }}
           />
@@ -89,15 +112,12 @@ export default function App() {
       )}
 
       {view === "config" && activeProject && (
-        <div>
-          <div style={{ padding: "0 24px" }}>
-            <button onClick={() => setView("project")}>
-              ← Back to Project
-            </button>
-          </div>
-          <ConfigEditor projectPath={activeProject.path} />
-        </div>
+        <ConfigEditor
+          projectPath={activeProject.path}
+          projectName={activeProject.name}
+          onBack={() => setView("project")}
+        />
       )}
-    </div>
+    </AppShell>
   )
 }

@@ -1,0 +1,61 @@
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.formFooter {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.presets {
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.presetRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-inset);
+}
+.presetRow > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeline {
+  margin-top: var(--space-4);
+}
+
+.subLabel {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.timelineList {
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+.timelineList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.muted {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}

@@ -4,6 +4,7 @@ import { Terminal as XTerm } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import "@xterm/xterm/css/xterm.css"
+import styles from "./Terminal.module.scss"
 
 interface TerminalProps {
   processIdPrefix?: string
@@ -76,14 +77,22 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
   }, [processIdPrefix])
 
   return (
-    <div style={{ border: "1px solid #333", borderRadius: 6 }}>
-      <div
-        style={{ padding: 8, display: "flex", justifyContent: "space-between" }}
-      >
-        <strong>Terminal</strong>
-        <button onClick={() => termRef.current?.clear()}>Clear</button>
+    <div className={styles.terminal}>
+      <div className={styles.header}>
+        <span className={styles.dots} aria-hidden>
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className={styles.title}>Terminal</span>
+        <button
+          className={styles.clear}
+          onClick={() => termRef.current?.clear()}
+        >
+          Clear
+        </button>
       </div>
-      <div ref={containerRef} style={{ height: 260, padding: 4 }} />
+      <div ref={containerRef} className={styles.surface} />
     </div>
   )
 }
