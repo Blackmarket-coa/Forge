@@ -28,8 +28,10 @@ export default function CreateProjectForm({
   const [name, setName] = useState("")
   const [directory, setDirectory] = useState("")
   const [template, setTemplate] = useState("react-ts")
-  const [manager, setManager] = useState<(typeof managers)[number]>("npm")
-  const [availableManagers, setAvailableManagers] = useState<Record<string, boolean>>({
+  const [manager, setManager] = useState<typeof managers[number]>("npm")
+  const [availableManagers, setAvailableManagers] = useState<
+    Record<string, boolean>
+  >({
     npm: true,
     pnpm: false,
     yarn: false,
@@ -37,7 +39,11 @@ export default function CreateProjectForm({
   })
   const [identifier, setIdentifier] = useState("com.app.app")
   const [windowTitle, setWindowTitle] = useState("")
-  const [targets, setTargets] = useState<string[]>(["macOS", "Linux", "Windows"])
+  const [targets, setTargets] = useState<string[]>([
+    "macOS",
+    "Linux",
+    "Windows",
+  ])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState("")
 
@@ -61,7 +67,10 @@ export default function CreateProjectForm({
     }
   }, [name])
 
-  const processIdPrefix = useMemo(() => (name ? `create:${name}` : "create:"), [name])
+  const processIdPrefix = useMemo(
+    () => (name ? `create:${name}` : "create:"),
+    [name]
+  )
 
   const pickDirectory = async () => {
     const selected = await open({ directory: true, multiple: false })
@@ -69,8 +78,8 @@ export default function CreateProjectForm({
       setDirectory(selected)
     }
   }
-const next = () => setStep((s) => Math.min(5, s + 1) as Step)
-const back = () => setStep((s) => Math.max(1, s - 1) as Step)
+  const next = () => setStep((s) => Math.min(5, s + 1) as Step)
+  const back = () => setStep((s) => Math.max(1, s - 1) as Step)
   const create = async () => {
     setCreating(true)
     setStep(5)
@@ -109,7 +118,12 @@ const back = () => setStep((s) => Math.max(1, s - 1) as Step)
         <div style={{ display: "grid", gap: 6 }}>
           {templates.map((t) => (
             <label key={t.value}>
-              <input type="radio" checked={template === t.value} onChange={() => setTemplate(t.value)} /> {t.label}
+              <input
+                type="radio"
+                checked={template === t.value}
+                onChange={() => setTemplate(t.value)}
+              />{" "}
+              {t.label}
             </label>
           ))}
         </div>
@@ -135,30 +149,40 @@ const back = () => setStep((s) => Math.max(1, s - 1) as Step)
         <div style={{ display: "grid", gap: 8, maxWidth: 640 }}>
           <label>
             App identifier
-            <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+            <input
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+            />
           </label>
           <label>
             Window title
-            <input value={windowTitle} onChange={(e) => setWindowTitle(e.target.value)} />
+            <input
+              value={windowTitle}
+              onChange={(e) => setWindowTitle(e.target.value)}
+            />
           </label>
           <div>
             Target platforms:
-            {(["macOS", "Linux", "Windows", "iOS", "Android"] as const).map((platform) => (
-              <label key={platform} style={{ display: "block" }}>
-                <input
-                  type="checkbox"
-                  checked={targets.includes(platform)}
-                  onChange={(e) =>
-                    setTargets((prev) =>
-                      e.target.checked
-                        ? (prev.includes(platform) ? prev : [...prev, platform])
-                        : prev.filter((p) => p !== platform)
-                    )
-                  }
-                />
-                {platform}
-              </label>
-            ))}
+            {(["macOS", "Linux", "Windows", "iOS", "Android"] as const).map(
+              (platform) => (
+                <label key={platform} style={{ display: "block" }}>
+                  <input
+                    type="checkbox"
+                    checked={targets.includes(platform)}
+                    onChange={(e) =>
+                      setTargets((prev) =>
+                        e.target.checked
+                          ? prev.includes(platform)
+                            ? prev
+                            : [...prev, platform]
+                          : prev.filter((p) => p !== platform)
+                      )
+                    }
+                  />
+                  {platform}
+                </label>
+              )
+            )}
           </div>
         </div>
       )}
@@ -174,7 +198,11 @@ const back = () => setStep((s) => Math.max(1, s - 1) as Step)
       <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
         <button onClick={onCancel}>Cancel</button>
         {step > 1 && step < 5 && <button onClick={back}>Back</button>}
-        {step < 4 && <button onClick={next} disabled={(step === 1 && (!name || !directory))}>Next</button>}
+        {step < 4 && (
+          <button onClick={next} disabled={step === 1 && (!name || !directory)}>
+            Next
+          </button>
+        )}
         {step === 4 && (
           <button onClick={create} disabled={!name || !directory || !manager}>
             Create

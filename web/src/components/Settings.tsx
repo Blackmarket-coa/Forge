@@ -2,14 +2,25 @@ import React, { useState } from "react"
 import { useAppState } from "../providers/AppStateProvider"
 
 export default function Settings() {
-  const { theme, toggleTheme, tier, licenseStatus, activateLicense, clearLicenseKey } = useAppState()
+  const {
+    theme,
+    toggleTheme,
+    tier,
+    licenseStatus,
+    activateLicense,
+    clearLicenseKey,
+  } = useAppState()
   const [draftKey, setDraftKey] = useState("")
   const [message, setMessage] = useState<string | null>(null)
 
   const onActivate = async () => {
     try {
       const status = await activateLicense(draftKey)
-      setMessage(status.valid ? `Activated ${status.tier.toUpperCase()} tier.` : "License key invalid")
+      setMessage(
+        status.valid
+          ? `Activated ${status.tier.toUpperCase()} tier.`
+          : "License key invalid"
+      )
       setDraftKey("")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Activation failed")
@@ -28,9 +39,13 @@ export default function Settings() {
       <button onClick={toggleTheme}>Toggle Theme</button>
       <p style={{ marginTop: 16 }}>State file: ~/.forge/forge.json</p>
 
-      <section style={{ marginTop: 24, display: "grid", gap: 8, maxWidth: 560 }}>
+      <section
+        style={{ marginTop: 24, display: "grid", gap: 8, maxWidth: 560 }}
+      >
         <h3>License</h3>
-        <p>Current tier: <strong>{tier.toUpperCase()}</strong></p>
+        <p>
+          Current tier: <strong>{tier.toUpperCase()}</strong>
+        </p>
         <p>License key: {licenseStatus.key_masked || "Not set"}</p>
         <p>Expires at: {licenseStatus.expires_at || "N/A"}</p>
         <div style={{ display: "flex", gap: 8 }}>

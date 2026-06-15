@@ -1,4 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import {
   clearLicense,
   getLicenseStatus,
@@ -46,7 +53,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>("dark")
   const [tier, setTier] = useState<Tier>("free")
-  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus>(defaultLicenseStatus)
+  const [licenseStatus, setLicenseStatus] =
+    useState<LicenseStatus>(defaultLicenseStatus)
 
   const addProject = useCallback(async (path: string) => {
     const project = await registerProject(path)
@@ -61,7 +69,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const removeProject = useCallback((id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id))
     setWorkspaces((prev) =>
-      prev.map((w) => ({ ...w, project_ids: w.project_ids.filter((pid) => pid !== id) }))
+      prev.map((w) => ({
+        ...w,
+        project_ids: w.project_ids.filter((pid) => pid !== id),
+      }))
     )
   }, [])
 
@@ -132,7 +143,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     ]
   )
 
-  return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
+  return (
+    <AppStateContext.Provider value={value}>
+      {children}
+    </AppStateContext.Provider>
+  )
 }
 
 export function useAppState() {

@@ -1,6 +1,7 @@
 import React from "react"
 
-interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+interface CheckboxProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
   checked?: boolean
 }
 

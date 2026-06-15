@@ -8,7 +8,11 @@ interface LicenseGateProps {
   children: React.ReactNode
 }
 
-export default function LicenseGate({ feature, description, children }: LicenseGateProps) {
+export default function LicenseGate({
+  feature,
+  description,
+  children,
+}: LicenseGateProps) {
   const { tier, activateLicense } = useAppState()
   const [showDialog, setShowDialog] = useState(false)
   const [keyInput, setKeyInput] = useState("")
@@ -39,7 +43,9 @@ export default function LicenseGate({ feature, description, children }: LicenseG
 
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ filter: "blur(1px)", opacity: 0.4, pointerEvents: "none" }}>{children}</div>
+      <div style={{ filter: "blur(1px)", opacity: 0.4, pointerEvents: "none" }}>
+        {children}
+      </div>
       <div
         style={{
           position: "absolute",
@@ -55,7 +61,9 @@ export default function LicenseGate({ feature, description, children }: LicenseG
         <div style={{ textAlign: "center", maxWidth: 520 }}>
           <h3 style={{ marginTop: 0 }}>Upgrade to Forge Pro</h3>
           <p>{description}</p>
-          <button onClick={() => setShowDialog((prev) => !prev)}>Enter License Key</button>
+          <button onClick={() => setShowDialog((prev) => !prev)}>
+            Enter License Key
+          </button>
           {showDialog && (
             <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
               <input

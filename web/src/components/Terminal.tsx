@@ -35,10 +35,16 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
 
     const unsubs: Array<() => void> = []
 
-    const addListener = async (event: string, handler: (payload: any) => void) => {
+    const addListener = async (
+      event: string,
+      handler: (payload: any) => void
+    ) => {
       const unlisten = await listen(event, (e: any) => {
         const payload: any = e.payload || {}
-        if (!processIdPrefix || String(payload.id || "").startsWith(processIdPrefix)) {
+        if (
+          !processIdPrefix ||
+          String(payload.id || "").startsWith(processIdPrefix)
+        ) {
           handler(payload)
         }
       })
@@ -54,7 +60,9 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
     })
 
     void addListener("process-exit", (payload) => {
-      term.writeln(`\x1b[31mProcess exited (id=${payload.id}) with code ${payload.code}\x1b[0m`)
+      term.writeln(
+        `\x1b[31mProcess exited (id=${payload.id}) with code ${payload.code}\x1b[0m`
+      )
     })
 
     const onResize = () => fitAddon.fit()
@@ -69,7 +77,9 @@ export default function Terminal({ processIdPrefix }: TerminalProps) {
 
   return (
     <div style={{ border: "1px solid #333", borderRadius: 6 }}>
-      <div style={{ padding: 8, display: "flex", justifyContent: "space-between" }}>
+      <div
+        style={{ padding: 8, display: "flex", justifyContent: "space-between" }}
+      >
         <strong>Terminal</strong>
         <button onClick={() => termRef.current?.clear()}>Clear</button>
       </div>

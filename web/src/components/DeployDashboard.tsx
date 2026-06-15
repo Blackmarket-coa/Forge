@@ -18,25 +18,45 @@ export default function DeployDashboard({
     })()
   }, [workspaceId])
 
-  const progress = useMemo(() => Number(status?.overall_progress || 0), [status])
+  const progress = useMemo(
+    () => Number(status?.overall_progress || 0),
+    [status]
+  )
   const matrix = status?.matrix || []
   const blockers = status?.blockers || []
   const checklist = status?.checklist || []
   const platforms = ["macOS", "Linux", "Windows", "iOS", "Android"]
 
   const labelFor = (value: string) => {
-    if (value === "built") return { icon: "✓", label: "Built", color: "#16a34a" }
-    if (value === "configured") return { icon: "○", label: "Configured", color: "#f59e0b" }
-    if (value === "not_started") return { icon: "✗", label: "Missing config", color: "#dc2626" }
+    if (value === "built")
+      return { icon: "✓", label: "Built", color: "#16a34a" }
+    if (value === "configured")
+      return { icon: "○", label: "Configured", color: "#f59e0b" }
+    if (value === "not_started")
+      return { icon: "✗", label: "Missing config", color: "#dc2626" }
     return { icon: "—", label: "Not targeted", color: "#6b7280" }
   }
 
   return (
-    <div style={{ border: "1px solid #444", borderRadius: 8, padding: 12, marginTop: 12 }}>
+    <div
+      style={{
+        border: "1px solid #444",
+        borderRadius: 8,
+        padding: 12,
+        marginTop: 12,
+      }}
+    >
       <h3>Deploy Dashboard</h3>
       <div style={{ marginBottom: 12 }}>
         <div style={{ height: 10, background: "#222", borderRadius: 999 }}>
-          <div style={{ width: `${progress}%`, height: "100%", background: "#22c55e", borderRadius: 999 }} />
+          <div
+            style={{
+              width: `${progress}%`,
+              height: "100%",
+              background: "#22c55e",
+              borderRadius: 999,
+            }}
+          />
         </div>
         <div>{progress.toFixed(1)}% ready</div>
       </div>
@@ -60,7 +80,12 @@ export default function DeployDashboard({
                   <td key={p}>
                     <button
                       onClick={() => onOpenProjectBuild(row.project_id, p)}
-                      style={{ color: view.color, border: "none", background: "transparent", cursor: "pointer" }}
+                      style={{
+                        color: view.color,
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                      }}
                     >
                       {view.icon} {view.label}
                     </button>
@@ -95,8 +120,12 @@ export default function DeployDashboard({
               <li key={idx}>
                 ⚠️ {b.message}
                 {b.affected_project ? ` — ${b.affected_project}` : ""}
-                {b.fix_hint ? <div style={{ opacity: 0.8 }}>Fix: {b.fix_hint}</div> : null}
-                {String(b.message).includes("tauri.conf.json") && <button>Open Config Editor</button>}
+                {b.fix_hint ? (
+                  <div style={{ opacity: 0.8 }}>Fix: {b.fix_hint}</div>
+                ) : null}
+                {String(b.message).includes("tauri.conf.json") && (
+                  <button>Open Config Editor</button>
+                )}
               </li>
             ))}
           </ul>

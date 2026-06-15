@@ -80,25 +80,60 @@ export default function WorkspaceView({
 
       {isFeatureAvailable("workspaces", tier) ? (
         <div style={{ display: "flex", gap: 8 }}>
-          <input placeholder="New workspace" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} />
+          <input
+            placeholder="New workspace"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <input
+            type="color"
+            value={newColor}
+            onChange={(e) => setNewColor(e.target.value)}
+          />
           <button onClick={create}>New Workspace</button>
         </div>
       ) : (
-        <LicenseGate feature="workspaces" description="Workspace creation is a Forge Pro feature.">
+        <LicenseGate
+          feature="workspaces"
+          description="Workspace creation is a Forge Pro feature."
+        >
           <div style={{ display: "flex", gap: 8 }}>
-            <input placeholder="New workspace" disabled value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <input type="color" disabled value={newColor} onChange={(e) => setNewColor(e.target.value)} />
-            <button disabled onClick={create}>New Workspace</button>
+            <input
+              placeholder="New workspace"
+              disabled
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <input
+              type="color"
+              disabled
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
+            />
+            <button disabled onClick={create}>
+              New Workspace
+            </button>
           </div>
         </LicenseGate>
       )}
 
       <div style={{ display: "grid", gap: 8 }}>
         {filtered.map((project) => (
-          <div key={project.id} style={{ border: "1px solid #444", borderRadius: 8, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <strong onClick={() => onSelectProject(project)} style={{ cursor: "pointer" }}>
+          <div
+            key={project.id}
+            style={{ border: "1px solid #444", borderRadius: 8, padding: 12 }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <strong
+                onClick={() => onSelectProject(project)}
+                style={{ cursor: "pointer" }}
+              >
                 {project.name}
               </strong>
               <select

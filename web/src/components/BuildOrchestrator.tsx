@@ -9,7 +9,11 @@ import {
 } from "../api/api"
 import Terminal from "./Terminal"
 
-export default function BuildOrchestrator({ workspaceId }: { workspaceId: string }) {
+export default function BuildOrchestrator({
+  workspaceId,
+}: {
+  workspaceId: string
+}) {
   const [presets, setPresets] = useState<BuildPreset[]>([])
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [name, setName] = useState("")
@@ -19,7 +23,10 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
   const [timeline, setTimeline] = useState<any[]>([])
 
   const refresh = async () => {
-    const [p, proj] = await Promise.all([getBuildPresets(workspaceId), getProjects(workspaceId)])
+    const [p, proj] = await Promise.all([
+      getBuildPresets(workspaceId),
+      getProjects(workspaceId),
+    ])
     setPresets(p)
     setProjects(proj)
   }
@@ -34,7 +41,13 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
       id: "",
       name,
       workspace_id: workspaceId,
-      steps: [{ project_id: selectedProject, targets, parallel_with_next: parallelWithNext }],
+      steps: [
+        {
+          project_id: selectedProject,
+          targets,
+          parallel_with_next: parallelWithNext,
+        },
+      ],
     }
     await saveBuildPreset(preset)
     setName("")
@@ -51,8 +64,15 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
       <h3>Build Orchestrator</h3>
 
       <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-        <input placeholder="Preset name" value={name} onChange={(e) => setName(e.target.value)} />
-        <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)}>
+        <input
+          placeholder="Preset name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <select
+          value={selectedProject}
+          onChange={(e) => setSelectedProject(e.target.value)}
+        >
           <option value="">Select Project</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
@@ -62,7 +82,17 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
         </select>
         <label>
           Targets (comma-separated)
-          <input value={targets.join(",")} onChange={(e) => setTargets(e.target.value.split(",").map((v) => v.trim()).filter(Boolean))} />
+          <input
+            value={targets.join(",")}
+            onChange={(e) =>
+              setTargets(
+                e.target.value
+                  .split(",")
+                  .map((v) => v.trim())
+                  .filter(Boolean)
+              )
+            }
+          />
         </label>
         <label>
           <input
@@ -79,7 +109,10 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
         {presets.map((preset) => (
           <li key={preset.id}>
             <strong>{preset.name}</strong> ({preset.steps.length} step(s))
-            <button onClick={() => runPreset(preset.id)} style={{ marginLeft: 8 }}>
+            <button
+              onClick={() => runPreset(preset.id)}
+              style={{ marginLeft: 8 }}
+            >
               Run Preset
             </button>
           </li>
@@ -91,7 +124,9 @@ export default function BuildOrchestrator({ workspaceId }: { workspaceId: string
           <h4>Timeline</h4>
           <ol>
             {timeline.map((step, idx) => (
-              <li key={idx}>status={step.status}, duration={step.duration_secs}s</li>
+              <li key={idx}>
+                status={step.status}, duration={step.duration_secs}s
+              </li>
             ))}
           </ol>
         </div>

@@ -33,9 +33,18 @@ export default function App() {
 
   return (
     <div>
-      <header style={{ display: "flex", justifyContent: "flex-end", padding: 12, gap: 8 }}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          padding: 12,
+          gap: 8,
+        }}
+      >
         <button onClick={() => setView("landing")}>Home</button>
-        {activeWorkspace !== "all" && <button onClick={() => setView("deploy")}>Deploy</button>}
+        {activeWorkspace !== "all" && (
+          <button onClick={() => setView("deploy")}>Deploy</button>
+        )}
         <button onClick={() => setView("settings")}>Settings</button>
       </header>
 
@@ -48,7 +57,10 @@ export default function App() {
       )}
       {view === "settings" && <Settings />}
       {view === "create" && (
-        <CreateProjectForm onCreated={handleCreated} onCancel={() => setView("landing")} />
+        <CreateProjectForm
+          onCreated={handleCreated}
+          onCancel={() => setView("landing")}
+        />
       )}
       {view === "deploy" && activeWorkspace !== "all" && (
         <LicenseGate
@@ -79,7 +91,9 @@ export default function App() {
       {view === "config" && activeProject && (
         <div>
           <div style={{ padding: "0 24px" }}>
-            <button onClick={() => setView("project")}>← Back to Project</button>
+            <button onClick={() => setView("project")}>
+              ← Back to Project
+            </button>
           </div>
           <ConfigEditor projectPath={activeProject.path} />
         </div>
