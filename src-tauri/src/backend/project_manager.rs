@@ -281,3 +281,101 @@ fn detect_frontend_framework(project_root: &Path) -> Result<Option<String>, Forg
 
     Ok(Some(framework.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Scaffold a minimal Tauri project under `root` and return its path.
+    fn scaffold(root: &Path, product: &str, framework_dep: &str) {
+        let tauri = root.join("src-tauri");
+        fs::create_dir_all(&tauri).unwrap();
+        fs::write(
+            tauri.join("tauri.conf.json"),
+            format!(
+                r#"{{ "productName": "{product}", "identifier": "com.example.{product}", "version": "1.2.3" }}"#
+            ),
+        )
+        .unwrap();
+        fs::write(
+            tauri.join("Cargo.toml"),
+            "[dependencies]\ntauri = { version = \"2.1.0\" }\n",
+        )
+        .unwrap();
+        let deps = if framework_dep.is_empty() {
+            "{}".to_string()
+        } else {
+            format!(r#"{{ "{framework_dep}": "^1.0.0" }}"#)
+        };
+        fs::write(
+            root.join("package.json"),
+            format!(r#"{{ "dependencies": {deps} }}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn detect_status_reads_conf_and_dependency() {
+        let dir = tempfile::tempdir().unwrap();
+        scaffold(dir.path(), "Demo", "react");
+
+        let status = detect_tauri_status(dir.path()).unwrap();
+        assert!(status.has_tauri_conf);
+        assert_eq!(status.product_name.as_deref(), Some("Demo"));
+        assert_eq!(status.identifier.as_deref(), Some("com.example.Demo"));
+        assert_eq!(status.version.as_deref(), Some("1.2.3"));
+        assert_eq!(status.tauri_version.as_deref(), Some("2.1.0"));
+        assert_eq!(status.frontend_framework.as_deref(), Some("react"));
+        assert_eq!(status.status, "ready");
+    }
+
+    #[test]
+    fn detect_status_errors_without_conf() {
+        let dir = tempfile::tempdir().unwrap();
+        let status = detect_tauri_status(dir.path()).unwrap();
+        assert!(!status.has_tauri_conf);
+        assert_eq!(status.status, "error");
+    }
+
+    #[test]
+    fn register_project_uses_product_name() {
+        let dir = tempfile::tempdir().unwrap();
+        scaffold(dir.path(), "MyApp", "svelte");
+
+        let meta = register_project(dir.path(), "id-1".to_string()).unwrap();
+        assert_eq!(meta.id, "id-1");
+        assert_eq!(meta.name, "MyApp");
+        assert_eq!(meta.frontend_framework.as_deref(), Some("svelte"));
+        assert_eq!(meta.status, "ready");
+    }
+
+    #[test]
+    fn scan_directory_finds_nested_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        scaffold(&dir.path().join("alpha"), "Alpha", "vue");
+        scaffold(&dir.path().join("beta"), "Beta", "");
+        // A non-Tauri directory should be ignored.
+        fs::create_dir_all(dir.path().join("docs")).unwrap();
+
+        let mut found = scan_directory(dir.path()).unwrap();
+        found.sort_by(|a, b| a.name.cmp(&b.name));
+        let names: Vec<_> = found.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["Alpha", "Beta"]);
+        assert_eq!(found[1].frontend_framework.as_deref(), Some("vanilla"));
+    }
+
+    #[test]
+    fn scan_directory_errors_on_missing_path() {
+        let result = scan_directory(Path::new("/no/such/forge/path"));
+        assert!(matches!(result, Err(ForgeError::ProjectNotFound(_))));
+    }
+
+    #[test]
+    fn framework_defaults_to_vanilla_without_package_json() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            detect_frontend_framework(dir.path()).unwrap().as_deref(),
+            Some("vanilla")
+        );
+    }
+}

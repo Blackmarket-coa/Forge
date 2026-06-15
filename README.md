@@ -74,29 +74,42 @@ This starts the React dev server without launching the desktop shell.
 
 #### 2) Full desktop app (Tauri + frontend)
 
+The Tauri CLI must be run from the **repository root** (the folder that
+contains `src-tauri/`), not from `web/`. Install the CLI once:
+
 ```bash
-cd web
-npm run tauri dev
+cargo install tauri-cli --version "^2"
+```
+
+Then, from the repository root:
+
+```bash
+cargo tauri dev
 ```
 
 This launches Forge as a desktop app and rebuilds automatically on source
-changes.
+changes. (`cargo tauri` automatically runs the `web/` dev server via the
+`beforeDevCommand` in `src-tauri/tauri.conf.json`.)
 
 ### Production build (local)
 
-From `web/`:
+From the repository root:
 
 ```bash
-npm run build
-npm run tauri build
+cargo tauri build
 ```
 
-Artifacts are generated under `src-tauri/target/`.
+This builds the frontend and the Rust app and produces a desktop bundle.
+Artifacts are generated under `src-tauri/target/`. Use `--no-bundle` to compile
+the binary without packaging installers.
 
 ### Common launch issues
 
-- **`tauri: command not found`**: install JS dependencies in `web/` and run via
-  package scripts (`npm run tauri ...`) instead of a global binary.
+- **"Couldn't recognize the current folder as a Tauri project"**: run `cargo
+  tauri` from the repository root, not from `web/` — `src-tauri/` must be a
+  subfolder of your working directory.
+- **`tauri: command not found`**: install the CLI with
+  `cargo install tauri-cli --version "^2"`.
 - **Linux WebKitGTK errors**: install your distro's WebKitGTK development
   packages and related GTK build dependencies, then retry.
 - **Rust target/toolchain issues**: run `rustup update` and reopen your shell.
