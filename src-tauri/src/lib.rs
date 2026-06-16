@@ -34,6 +34,8 @@ pub fn register_commands(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
             backend::ipc::check_environment,
             backend::ipc::collect_artifacts,
             backend::ipc::create_project,
+            backend::ipc::create_web_app,
+            backend::ipc::get_default_app_dir,
             backend::ipc::init_tauri,
             backend::ipc::create_workspace,
             backend::ipc::get_workspaces,

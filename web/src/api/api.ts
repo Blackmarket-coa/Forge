@@ -112,6 +112,37 @@ export async function createProject(
   return invoke("create_project", { path, name, template, packageManager })
 }
 
+export interface CreateWebAppArgs {
+  parentDir: string
+  name: string
+  url: string
+  width?: number
+  height?: number
+  identifier?: string
+}
+
+/**
+ * Generate a desktop app that wraps a website URL. Requires only a website
+ * address and an app name — no Node.js, package manager, or framework.
+ */
+export async function createWebApp(
+  args: CreateWebAppArgs
+): Promise<ProjectMeta> {
+  return invoke("create_web_app", {
+    parentDir: args.parentDir,
+    name: args.name,
+    url: args.url,
+    width: args.width,
+    height: args.height,
+    identifier: args.identifier,
+  })
+}
+
+/** A friendly default folder (~/Forge Apps) for saving generated apps. */
+export async function getDefaultAppDir(): Promise<string> {
+  return invoke("get_default_app_dir")
+}
+
 export async function initTauri(projectPath: string): Promise<any> {
   return invoke("init_tauri", { projectPath })
 }

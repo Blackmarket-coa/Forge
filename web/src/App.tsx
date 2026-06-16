@@ -7,10 +7,18 @@ import LandingScreen from "./components/LandingScreen"
 import LicenseGate from "./components/LicenseGate"
 import ProjectView from "./components/ProjectView"
 import Settings from "./components/Settings"
+import WebsiteToAppForm from "./components/WebsiteToAppForm"
 import { getProjects, ProjectMeta } from "./api/api"
 import { useAppState } from "./providers/AppStateProvider"
 
-type View = "landing" | "project" | "config" | "settings" | "create" | "deploy"
+type View =
+  | "landing"
+  | "project"
+  | "config"
+  | "settings"
+  | "create"
+  | "website"
+  | "deploy"
 
 export default function App() {
   const { theme, toggleTheme, tier } = useAppState()
@@ -38,13 +46,13 @@ export default function App() {
 
   const nav: NavItem[] = useMemo(
     () => [
-      { id: "projects", label: "Projects", icon: "📁" },
+      { id: "projects", label: "My Apps", icon: "📁" },
       {
         id: "deploy",
-        label: "Deploy",
+        label: "Publish",
         icon: "🚀",
         disabled: !hasWorkspace,
-        hint: "Select a workspace to view deploy readiness",
+        hint: "Pick a group of apps first to see what's left before publishing",
       },
       { id: "settings", label: "Settings", icon: "⚙️" },
     ],
@@ -72,12 +80,20 @@ export default function App() {
       {view === "landing" && (
         <LandingScreen
           onSelectProject={openProject}
+          onOpenWebsiteWizard={() => setView("website")}
           onOpenCreateWizard={() => setView("create")}
           onWorkspaceActive={(id) => setActiveWorkspace(id)}
         />
       )}
 
       {view === "settings" && <Settings />}
+
+      {view === "website" && (
+        <WebsiteToAppForm
+          onCreated={handleCreated}
+          onCancel={() => setView("landing")}
+        />
+      )}
 
       {view === "create" && (
         <CreateProjectForm
@@ -89,7 +105,7 @@ export default function App() {
       {view === "deploy" && hasWorkspace && (
         <LicenseGate
           feature="deploy_dashboard"
-          description="Deploy dashboards and release readiness tracking are available on Forge Pro."
+          description="The publishing dashboard is a Forge Pro feature."
         >
           <DeployDashboard
             workspaceId={activeWorkspace}

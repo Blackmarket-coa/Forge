@@ -191,16 +191,16 @@ export default function ConfigEditor({
     <div>
       {onBack && (
         <Button variant="ghost" size="sm" onClick={onBack}>
-          ← Back to Project
+          ← Back to app
         </Button>
       )}
 
       <PageHeader
-        title="Configuration"
+        title="App settings"
         subtitle={
           projectName
-            ? `Editing tauri.conf.json for ${projectName}`
-            : "Editing tauri.conf.json"
+            ? `Name, window, and build options for ${projectName}`
+            : "Name, window, and build options"
         }
         actions={
           <Tabs
@@ -216,9 +216,9 @@ export default function ConfigEditor({
 
       {mode === "form" ? (
         <div className={styles.sections}>
-          <Collapsible title="App Identity">
+          <Collapsible title="About your app">
             <p className={styles.hint}>
-              These values appear in installers and app metadata.
+              These appear in your installer and the app&rsquo;s details.
             </p>
             <div className={styles.rows}>
               <Field label="App name">
