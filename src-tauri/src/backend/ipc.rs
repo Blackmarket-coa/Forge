@@ -24,6 +24,7 @@ use crate::backend::project_manager::{
     register_project as register_project_impl, scan_directory as scan_dir_impl, ProjectMeta,
     Workspace,
 };
+use crate::backend::web_app::{self, WebAppOptions};
 
 static PROCESS_MANAGER: OnceLock<Mutex<ProcessManager>> = OnceLock::new();
 
@@ -298,6 +299,42 @@ pub async fn create_project(
 
     let new_project_dir = parent_dir.join(&name);
     register_project(new_project_dir.to_string_lossy().to_string()).await
+}
+
+/// Generate a desktop app that wraps a website URL.
+///
+/// Unlike [`create_project`], this writes the Tauri project directly, so it
+/// needs no Node.js, package manager, or framework — only a website address
+/// and an app name. This is the engine behind Forge's "turn your website into
+/// an app" flow for non-technical users.
+#[tauri::command]
+pub async fn create_web_app(
+    parent_dir: String,
+    name: String,
+    url: String,
+    width: Option<u32>,
+    height: Option<u32>,
+    identifier: Option<String>,
+) -> Result<ProjectMeta, String> {
+    let opts = WebAppOptions {
+        name,
+        url,
+        identifier,
+        width,
+        height,
+    };
+
+    let project_dir =
+        web_app::scaffold_web_app(&PathBuf::from(parent_dir), &opts).map_err(|e| e.to_string())?;
+    info!("create_web_app: generated {}", project_dir.display());
+
+    register_project(project_dir.to_string_lossy().to_string()).await
+}
+
+/// Suggest a friendly default folder (`~/Forge Apps`) for saving generated apps.
+#[tauri::command]
+pub async fn get_default_app_dir() -> Result<String, String> {
+    Ok(web_app::default_app_dir().to_string_lossy().to_string())
 }
 
 #[tauri::command]

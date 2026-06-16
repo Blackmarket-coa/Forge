@@ -25,7 +25,15 @@ interface ProjectViewProps {
   onOpenConfig: () => void
 }
 
-const BUILD_TARGETS = ["dmg", "appimage", "deb", "nsis", "msi"] as const
+// `value` is the Tauri bundle identifier passed to the build; `label` is the
+// plain-language name shown to the user.
+const BUILD_TARGETS: Array<{ value: string; label: string }> = [
+  { value: "dmg", label: "macOS app (.dmg)" },
+  { value: "appimage", label: "Linux app (AppImage)" },
+  { value: "deb", label: "Linux app (.deb)" },
+  { value: "msi", label: "Windows app (.msi)" },
+  { value: "nsis", label: "Windows installer (.exe)" },
+]
 
 export default function ProjectView({
   project,
@@ -65,9 +73,9 @@ export default function ProjectView({
       setProcessId(`dev:${project.path}`)
       setTab("output")
       setIsRunning(true)
-      enqueueSnackbar(`Dev server started (pid ${pid})`, { variant: "success" })
+      enqueueSnackbar(`Preview started (pid ${pid})`, { variant: "success" })
     } catch (e: any) {
-      enqueueSnackbar(`Failed to start dev: ${e?.message || e}`, {
+      enqueueSnackbar(`Couldn't start preview: ${e?.message || e}`, {
         variant: "error",
       })
     }
@@ -113,16 +121,16 @@ export default function ProjectView({
   }
 
   const meta: Array<[string, React.ReactNode]> = [
-    ["Path", project.path],
-    ["Identifier", project.identifier || "unknown"],
-    ["Framework", project.frontend_framework || "vanilla"],
+    ["Folder", project.path],
+    ["App ID", project.identifier || "unknown"],
+    ["Built with", project.frontend_framework || "website"],
     ["Role", project.role || "—"],
   ]
 
   return (
     <div>
       <Button variant="ghost" size="sm" onClick={onBack}>
-        ← Back to Projects
+        ← Back to my apps
       </Button>
 
       <PageHeader
@@ -151,11 +159,11 @@ export default function ProjectView({
               </Button>
             ) : (
               <Button variant="primary" onClick={handleDev}>
-                Run Dev
+                Preview app
               </Button>
             )}
             <Button variant="secondary" onClick={onOpenConfig}>
-              Config
+              App settings
             </Button>
           </>
         }
@@ -169,12 +177,12 @@ export default function ProjectView({
                 value={tab}
                 onValueChange={setTab}
                 tabs={[
-                  { value: "output", label: "Output" },
+                  { value: "output", label: "Activity" },
                   {
                     value: "artifacts",
-                    label: `Artifacts (${artifacts.length})`,
+                    label: `Installers (${artifacts.length})`,
                   },
-                  { value: "history", label: "History" },
+                  { value: "history", label: "Past builds" },
                 ]}
               />
             </div>
@@ -187,8 +195,8 @@ export default function ProjectView({
                 (artifacts.length === 0 ? (
                   <EmptyState
                     icon="📦"
-                    title="No artifacts yet"
-                    description="Run a build to produce installable artifacts."
+                    title="No installers yet"
+                    description="Build your app to create an installer you can share."
                   />
                 ) : (
                   <ul className={styles.artifacts}>
@@ -208,13 +216,13 @@ export default function ProjectView({
               {tab === "history" && (
                 <LicenseGate
                   feature="build_history"
-                  description="Build history and rerun tracking are available on Forge Pro."
+                  description="Seeing and re-running past builds is a Forge Pro feature."
                 >
                   {history.length === 0 ? (
                     <EmptyState
                       icon="🕓"
-                      title="No build history"
-                      description="Past builds for this project will appear here."
+                      title="No builds yet"
+                      description="Each time you build your app, it'll show up here."
                     />
                   ) : (
                     <table className={styles.table}>
@@ -268,14 +276,17 @@ export default function ProjectView({
         </div>
 
         <div className={styles.side}>
-          <Card title="Build">
+          <Card
+            title="Build an installer"
+            subtitle="Pick which kinds of installer to create, then build."
+          >
             <div className={styles.targets}>
               {BUILD_TARGETS.map((target) => (
                 <Checkbox
-                  key={target}
-                  label={target}
-                  checked={targets.includes(target)}
-                  onChange={(e) => toggleTarget(target, e.target.checked)}
+                  key={target.value}
+                  label={target.label}
+                  checked={targets.includes(target.value)}
+                  onChange={(e) => toggleTarget(target.value, e.target.checked)}
                 />
               ))}
             </div>
@@ -286,7 +297,7 @@ export default function ProjectView({
               disabled={targets.length === 0}
               onClick={handleStartBuild}
             >
-              {building ? "Building…" : "Start Build"}
+              {building ? "Building…" : "Build installer"}
             </Button>
             {buildResult && (
               <div className={styles.buildResult}>

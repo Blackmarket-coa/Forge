@@ -1,8 +1,29 @@
 # Forge
 
-Forge is a desktop-first visual project manager for **Tauri** applications.
-It helps you discover projects, manage workspaces, run builds, inspect artifacts,
-and manage release readiness from one interface.
+Forge turns websites into desktop apps — and helps you build and share them —
+without writing any code.
+
+If you have a website, Forge's **"Turn your website into an app"** flow asks for
+just two things: your web address and an app name. It then generates a complete,
+build-ready [Tauri](https://tauri.app) project that opens your site in its own
+desktop window. No Node.js, package manager, or framework knowledge required;
+the only thing you need to produce a shareable installer is the free Tauri build
+toolchain, which Forge checks for and explains in plain language.
+
+Forge is also a full visual project manager for Tauri applications: discover
+projects, group them, run builds, inspect installers, and track what's left
+before publishing — all from one interface.
+
+## Turn a website into an app
+
+1. Open Forge and click **Turn a website into an app**.
+2. Enter your website address (e.g. `yoursite.com`) and a name for your app.
+3. Click **Create my app**. Forge writes the project and registers it.
+4. Open the app and **Build installer** to produce something you can share.
+
+Under the hood this generates a minimal Tauri project whose main window points
+directly at your URL (see `src-tauri/src/backend/web_app.rs`). Default app icons
+are included so the project builds out of the box; you can replace them later.
 
 ## Current status
 

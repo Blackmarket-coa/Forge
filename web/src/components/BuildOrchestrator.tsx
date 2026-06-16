@@ -64,9 +64,9 @@ export default function BuildOrchestrator({
       })
       setName("")
       await refresh()
-      enqueueSnackbar("Preset saved", { variant: "success" })
+      enqueueSnackbar("Recipe saved", { variant: "success" })
     } catch (e: any) {
-      enqueueSnackbar(`Could not save preset: ${e?.message || e}`, {
+      enqueueSnackbar(`Could not save recipe: ${e?.message || e}`, {
         variant: "error",
       })
     }
@@ -77,9 +77,9 @@ export default function BuildOrchestrator({
     try {
       const result = await runBuildPreset(presetId)
       setTimeline(result?.timeline || [])
-      enqueueSnackbar("Preset finished", { variant: "success" })
+      enqueueSnackbar("Build finished", { variant: "success" })
     } catch (e: any) {
-      enqueueSnackbar(`Preset run failed: ${e?.message || e}`, {
+      enqueueSnackbar(`Build failed: ${e?.message || e}`, {
         variant: "error",
       })
     } finally {
@@ -88,21 +88,24 @@ export default function BuildOrchestrator({
   }
 
   return (
-    <Card title="Build orchestration" subtitle="Run multi-project builds.">
+    <Card
+      title="Build several apps at once"
+      subtitle="Save a recipe to build a group of apps together."
+    >
       <div className={styles.form}>
-        <Field label="Preset name">
+        <Field label="Recipe name">
           <Input
-            placeholder="Release all"
+            placeholder="All my apps"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
-        <Field label="Project">
+        <Field label="App">
           <Select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
           >
-            <option value="">Select project</option>
+            <option value="">Choose an app</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -110,7 +113,10 @@ export default function BuildOrchestrator({
             ))}
           </Select>
         </Field>
-        <Field label="Targets" help="Comma-separated bundle targets.">
+        <Field
+          label="Installer types"
+          help="Separate with commas, e.g. dmg, msi, appimage."
+        >
           <Input
             value={targets.join(",")}
             onChange={(e) =>
@@ -125,7 +131,7 @@ export default function BuildOrchestrator({
         </Field>
         <div className={styles.formFooter}>
           <Checkbox
-            label="Run parallel with next step"
+            label="Build at the same time as the next app"
             checked={parallelWithNext}
             onChange={(e) => setParallelWithNext(e.target.checked)}
           />
@@ -134,7 +140,7 @@ export default function BuildOrchestrator({
             onClick={createPreset}
             disabled={!name || !selectedProject}
           >
-            Add preset
+            Save recipe
           </Button>
         </div>
       </div>
@@ -142,8 +148,8 @@ export default function BuildOrchestrator({
       {presets.length === 0 ? (
         <EmptyState
           icon="🧩"
-          title="No presets yet"
-          description="Create a preset to orchestrate builds across this workspace."
+          title="No recipes yet"
+          description="Save a recipe to build a group of apps together."
         />
       ) : (
         <ul className={styles.presets}>
@@ -151,7 +157,7 @@ export default function BuildOrchestrator({
             <li key={preset.id} className={styles.presetRow}>
               <div>
                 <strong>{preset.name}</strong>
-                <Badge tone="neutral">{preset.steps.length} step(s)</Badge>
+                <Badge tone="neutral">{preset.steps.length} app(s)</Badge>
               </div>
               <Button
                 size="sm"
@@ -168,7 +174,7 @@ export default function BuildOrchestrator({
 
       {timeline.length > 0 && (
         <div className={styles.timeline}>
-          <div className={styles.subLabel}>Timeline</div>
+          <div className={styles.subLabel}>Results</div>
           <ol className={styles.timelineList}>
             {timeline.map((step, idx) => (
               <li key={idx}>

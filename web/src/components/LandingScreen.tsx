@@ -17,12 +17,14 @@ import styles from "./LandingScreen.module.scss"
 
 interface LandingScreenProps {
   onSelectProject: (project: ProjectMeta) => void
+  onOpenWebsiteWizard: () => void
   onOpenCreateWizard: () => void
   onWorkspaceActive?: (workspaceId: string) => void
 }
 
 export default function LandingScreen({
   onSelectProject,
+  onOpenWebsiteWizard,
   onOpenCreateWizard,
   onWorkspaceActive,
 }: LandingScreenProps) {
@@ -60,24 +62,32 @@ export default function LandingScreen({
     onOpenCreateWizard()
   }
 
+  const handleOpenWebsite = () => {
+    if (atLimit) return
+    onOpenWebsiteWizard()
+  }
+
   const hasProjects = projects.length > 0
 
   return (
     <div>
       <PageHeader
-        title="Projects"
-        subtitle="Discover, build, and ship your Tauri apps."
+        title="My Apps"
+        subtitle="Turn a website into a desktop app, then build and share it."
         actions={
           <>
             <Button
-              variant="secondary"
+              variant="ghost"
               onClick={handleAddExisting}
               loading={adding}
             >
-              Add Existing
+              Add existing
             </Button>
-            <Button variant="primary" onClick={handleOpenCreate}>
-              Create New Project
+            <Button variant="secondary" onClick={handleOpenCreate}>
+              New blank project
+            </Button>
+            <Button variant="primary" onClick={handleOpenWebsite}>
+              Turn a website into an app
             </Button>
           </>
         }
@@ -97,29 +107,28 @@ export default function LandingScreen({
       {!hasProjects ? (
         <div className={styles.onboarding}>
           <EmptyState
-            icon="📦"
-            title="No projects yet"
-            description="Create a new Tauri project or add an existing one to get started."
+            icon="🌐"
+            title="Make your first app"
+            description="Have a website? Turn it into a desktop app in two steps — no coding needed. Just enter your web address and a name."
             action={
               <>
-                <Button variant="primary" onClick={handleOpenCreate}>
-                  Create New
+                <Button variant="primary" onClick={handleOpenWebsite}>
+                  Turn a website into an app
                 </Button>
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   onClick={handleAddExisting}
                   loading={adding}
                 >
-                  Add Existing
+                  Add an existing project
                 </Button>
               </>
             }
           />
-          <Card title="Before you build">
-            <p className={styles.onboardingHint}>
-              Forge runs your Tauri builds locally. Make sure your toolchain is
-              ready:
-            </p>
+          <Card
+            title="Is your computer ready?"
+            subtitle="Forge builds apps right on your computer. Building installers needs these free tools — Forge will tell you how to add anything that's missing."
+          >
             <EnvironmentCheck />
           </Card>
         </div>
@@ -135,7 +144,7 @@ export default function LandingScreen({
           {activeWorkspace !== "all" && (
             <LicenseGate
               feature="build_presets"
-              description="Build presets and orchestration are available on Forge Pro."
+              description="Building several apps at once is a Forge Pro feature."
             >
               <BuildOrchestrator workspaceId={activeWorkspace} />
             </LicenseGate>

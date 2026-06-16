@@ -50,9 +50,9 @@ export default function WorkspaceView({
       setNewName("")
       setNewColor("#f5853f")
       await refresh()
-      enqueueSnackbar("Workspace created", { variant: "success" })
+      enqueueSnackbar("Group created", { variant: "success" })
     } catch (e: any) {
-      enqueueSnackbar(`Could not create workspace: ${e?.message || e}`, {
+      enqueueSnackbar(`Could not create group: ${e?.message || e}`, {
         variant: "error",
       })
     }
@@ -73,7 +73,7 @@ export default function WorkspaceView({
   const workspaceForm = (
     <div className={styles.createRow}>
       <Input
-        placeholder="New workspace name"
+        placeholder="New group name"
         value={newName}
         disabled={!canManageWorkspaces}
         onChange={(e) => setNewName(e.target.value)}
@@ -109,7 +109,7 @@ export default function WorkspaceView({
               .join(" ")}
             onClick={() => selectWorkspace("all")}
           >
-            All Projects
+            All apps
           </button>
           {workspaces.map((ws) => (
             <button
@@ -140,7 +140,7 @@ export default function WorkspaceView({
         ) : (
           <LicenseGate
             feature="workspaces"
-            description="Workspace creation is a Forge Pro feature."
+            description="Grouping apps is a Forge Pro feature."
           >
             {workspaceForm}
           </LicenseGate>
@@ -179,7 +179,7 @@ export default function WorkspaceView({
                     await refresh()
                   }}
                 >
-                  <option value="">Add to workspace…</option>
+                  <option value="">Add to group…</option>
                   {workspaces.map((ws) => (
                     <option key={ws.id} value={ws.id}>
                       {ws.name}

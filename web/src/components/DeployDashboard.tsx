@@ -14,11 +14,11 @@ const PLATFORMS = ["macOS", "Linux", "Windows", "iOS", "Android"]
 function statusView(value: string): { label: string; tone: Tone } {
   switch (value) {
     case "built":
-      return { label: "Built", tone: "success" }
+      return { label: "Ready", tone: "success" }
     case "configured":
-      return { label: "Configured", tone: "warning" }
+      return { label: "Set up", tone: "warning" }
     case "not_started":
-      return { label: "Missing", tone: "danger" }
+      return { label: "Not built", tone: "danger" }
     default:
       return { label: "—", tone: "neutral" }
   }
@@ -57,7 +57,7 @@ export default function DeployDashboard({
   if (loading) {
     return (
       <div className={styles.loading}>
-        <Spinner size={20} /> Checking release readiness…
+        <Spinner size={20} /> Checking what's ready…
       </div>
     )
   }
@@ -65,8 +65,8 @@ export default function DeployDashboard({
   return (
     <div>
       <PageHeader
-        title="Deploy readiness"
-        subtitle="Track how close each project is to shipping on every platform."
+        title="Getting ready to publish"
+        subtitle="See how close each app is to being ready on every kind of computer."
       />
 
       <Card>
@@ -79,13 +79,13 @@ export default function DeployDashboard({
       </Card>
 
       <div className={styles.matrixCard}>
-        <Card title="Platform matrix" padded={false}>
+        <Card title="Where your apps run" padded={false}>
           {matrix.length === 0 ? (
             <div className={styles.pad}>
               <EmptyState
                 icon="🚀"
-                title="No projects in this workspace"
-                description="Add projects to the workspace to track deploy readiness."
+                title="No apps in this group"
+                description="Add apps to this group to see how ready they are to publish."
               />
             </div>
           ) : (
@@ -130,7 +130,7 @@ export default function DeployDashboard({
       </div>
 
       <div className={styles.columns}>
-        <Card title="Checklist">
+        <Card title="Readiness checklist">
           {checklist.length === 0 ? (
             <p className={styles.muted}>Nothing to check yet.</p>
           ) : (
@@ -141,11 +141,11 @@ export default function DeployDashboard({
                     tone={item.tauri_initialized ? "success" : "danger"}
                     dot
                   >
-                    {item.tauri_initialized ? "Init" : "No init"}
+                    {item.tauri_initialized ? "Set up" : "Not set up"}
                   </Badge>
                   <span>{item.project}</span>
                   <Badge tone={item.config_ok ? "success" : "warning"}>
-                    {item.config_ok ? "config ok" : "config needs review"}
+                    {item.config_ok ? "settings ok" : "check settings"}
                   </Badge>
                 </li>
               ))}
@@ -153,10 +153,10 @@ export default function DeployDashboard({
           )}
         </Card>
 
-        <Card title="Blockers">
+        <Card title="Things to fix">
           {blockers.length === 0 ? (
             <p className={styles.muted}>
-              No blockers. You're clear to ship. 🎉
+              Nothing to fix — you're ready to publish! 🎉
             </p>
           ) : (
             <ul className={styles.list}>

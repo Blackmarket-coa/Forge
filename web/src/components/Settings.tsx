@@ -52,13 +52,13 @@ export default function Settings() {
     <div>
       <PageHeader
         title="Settings"
-        subtitle="Manage your license and toolchain."
+        subtitle="Manage your license and check the tools on your computer."
       />
 
       <div className={styles.grid}>
         <Card
           title="License"
-          subtitle="Unlock workspaces, build orchestration, and the deploy dashboard."
+          subtitle="Unlock app groups, multi-app builds, and the publish dashboard."
           actions={
             <Badge tone={tier === "free" ? "neutral" : "accent"}>
               {tier.toUpperCase()}
@@ -115,8 +115,8 @@ export default function Settings() {
         </Card>
 
         <Card
-          title="Toolchain"
-          subtitle="Forge builds run locally and need these tools installed."
+          title="Build tools"
+          subtitle="Forge builds apps right on your computer. Here's what's installed."
         >
           <EnvironmentCheck />
         </Card>
@@ -130,9 +130,9 @@ export default function Settings() {
 
         <Card title="About">
           <dl className={styles.summary}>
-            <dt>App state</dt>
+            <dt>Saved data</dt>
             <dd>~/.forge/forge.json</dd>
-            <dt>License cache</dt>
+            <dt>License file</dt>
             <dd>~/.forge/license.json</dd>
           </dl>
         </Card>
