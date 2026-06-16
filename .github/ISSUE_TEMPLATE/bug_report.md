@@ -23,12 +23,11 @@ assignees: ''
 4.
 
 ### Context
-#### `tilt doctor` Output
-<!--- Run `tilt doctor` and paste the output here so we know about your environment -->
-```
-$ tilt doctor
-...
-```
+#### Environment
+<!--- Open Forge's Environment tab and paste the toolchain status, plus your OS and Forge version -->
+- OS:
+- Forge version:
+- Rust / Node / Tauri CLI versions:
 
 #### About Your Use Case
 <!--- How has this issue affected you? What are you trying to accomplish? -->

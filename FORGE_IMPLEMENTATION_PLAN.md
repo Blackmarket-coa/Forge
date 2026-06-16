@@ -1,17 +1,16 @@
 # Forge Post-Fork Implementation Plan
 
-This repository currently contains the upstream Tilt codebase, not the Tauri desktop app fork referenced in the Forge migration outline.
+This repository is the Forge desktop app: a Tauri v2 (Rust) backend in `src-tauri/`
+and a React + TypeScript frontend in `web/`. The upstream Tilt Go codebase has been
+removed; this document is retained as the **execution order + roadmap** for the
+remaining phases.
 
-To execute the Forge roadmap successfully, use this as the **execution order + readiness checklist** once the correct fork is checked out (the Tauri v2 + React desktop app baseline).
+## Repository Readiness Gate (before Phase 0) — satisfied
 
-## Repository Readiness Gate (before Phase 0)
-
-- [ ] Verify the repo root contains `src-tauri/`, `src/`, and `package.json` for the desktop app.
-- [ ] Verify `src-tauri/tauri.conf.json` exists and app runs with `npm run tauri dev`.
-- [ ] Confirm fork origin (`binarygeotech/forge`) and preserve MIT attribution.
-- [ ] Create branch naming convention for rollout (e.g. `forge/phase-0-rebrand`, `forge/phase-1-backend-shell`).
-
-If any item fails, stop and switch to the correct repo before continuing.
+- [x] Repo root contains `src-tauri/`, `web/`, and the app configuration.
+- [x] `src-tauri/tauri.conf.json` exists and is configured for Forge.
+- [x] Fork origin confirmed; MIT attribution preserved in `LICENSE`.
+- [x] Branch naming convention established for rollout.
 
 ## Phase 0 — Rebrand (Day 1)
 

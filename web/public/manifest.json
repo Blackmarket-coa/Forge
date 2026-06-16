@@ -1,7 +1,7 @@
 {
-  "name": "Tilt",
-  "short_name": "Tilt",
-  "start_url": "http://localhost:10350",
+  "name": "Forge",
+  "short_name": "Forge",
+  "start_url": ".",
   "display": "minimal-ui",
   "display_override":["window-control-overlay","minimal-ui"],
   "background_color": "#002B37",
