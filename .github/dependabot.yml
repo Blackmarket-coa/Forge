@@ -1,13 +1,13 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/**"
+    directory: "/web"
     schedule:
       interval: "daily"
     allow:
       - dependency-type: "production"
-  - package-ecosystem: "gomod"
-    directory: "/**"
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
     schedule:
       interval: "daily"
     allow:
