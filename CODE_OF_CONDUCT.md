@@ -6,13 +6,13 @@
 * Don’t be destructive or inflammatory
 
 ## Goals of This Document
-The Tilt project is committed to providing a friendly, safe, and welcoming environment for all of our users, contributors, followers, and Fans, regardless of: gender identity or expression; sexual orientation; disability; neurodivergence; physical appearance; body size; ethnicity; nationality; race; age; religion; level of technical experience; education; socio-economic status; or similar personal characteristics.
+Forge is committed to providing a friendly, safe, and welcoming environment for all of our users, contributors, followers, and Fans, regardless of: gender identity or expression; sexual orientation; disability; neurodivergence; physical appearance; body size; ethnicity; nationality; race; age; religion; level of technical experience; education; socio-economic status; or similar personal characteristics.
 
 The first goal of the Code of Conduct is to specify a baseline standard of behavior so that people with different social values and communication styles can talk effectively, productively, and respectfully.
 
 The second goal is to provide a mechanism for resolving conflicts in the community when they arise.
 
-The third goal of the Code of Conduct is to make our community welcoming to people from different backgrounds. Diversity is critical to the project; for Windmill to be successful, it needs contributors and users from all backgrounds.
+The third goal of the Code of Conduct is to make our community welcoming to people from different backgrounds. Diversity is critical to the project; for Forge to be successful, it needs contributors and users from all backgrounds.
 
 We believe that healthy debate and disagreement are essential to a healthy project and community. However, it is never okay to be disrespectful. We value diverse opinions, but we value respectful behavior more.
 
@@ -64,7 +64,7 @@ We do not believe that all conflict is bad; healthy debate and disagreement ofte
 
 If you see someone violating the Code of Conduct, you are encouraged to address the behavior directly with those involved. Many issues can be resolved quickly and easily, and this gives people more control over the outcome of their dispute. If you are unable to resolve the matter for any reason, or if the behavior is threatening or harassing, report it. We are dedicated to providing an environment where participants feel welcome and safe.
 
-Reports should be directed to **tilt-team@docker.com**.
+Reports should be directed to the Forge maintainers.
 
 We will investigate every complaint, but you may not receive a direct response. We will use our discretion in determining when and how to follow up on reported incidents, which may range from not taking action to permanent expulsion from the project and project-sponsored spaces. We will notify the accused of the report and provide them an opportunity to discuss it before any action is taken. The identity of the reporter will be omitted from the details of the report supplied to the accused. In potentially harmful situations, such as ongoing harassment or threats to anyone’s safety, we may take action without notice.
 
