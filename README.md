@@ -1,5 +1,10 @@
 # Forge
 
+[![CI](https://github.com/Blackmarket-coa/Forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Blackmarket-coa/Forge/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Blackmarket-coa/Forge?include_prereleases&sort=semver)](https://github.com/Blackmarket-coa/Forge/releases)
+[![License](https://img.shields.io/github/license/Blackmarket-coa/Forge)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-blue)
+
 Forge turns websites into desktop apps — and helps you build and share them —
 without writing any code.
 
@@ -14,6 +19,27 @@ Forge is also a full visual project manager for Tauri applications: discover
 projects, group them, run builds, inspect installers, and track what's left
 before publishing — all from one interface.
 
+## Contents
+
+- [Screenshots](#screenshots)
+- [Turn a website into an app](#turn-a-website-into-an-app)
+- [Features](#features)
+- [Current status](#current-status)
+- [Repository layout](#repository-layout)
+- [Local development](#local-development)
+- [Testing & quality](#testing--quality)
+- [License/tier behavior (current)](#licensetier-behavior-current)
+- [Releases](#releases)
+- [Notes](#notes)
+
+## Screenshots
+
+> _Placeholders — swap in real captures under `docs/screenshots/` when available._
+
+| My Apps | Turn a website into an app | Publish dashboard |
+| --- | --- | --- |
+| <!-- docs/screenshots/my-apps.png --> ![Forge — My Apps](https://placehold.co/640x400?text=Forge+-+My+Apps) | <!-- docs/screenshots/website-to-app.png --> ![Forge — website to app](https://placehold.co/640x400?text=Website+to+App) | <!-- docs/screenshots/publish.png --> ![Forge — publish dashboard](https://placehold.co/640x400?text=Publish+Dashboard) |
+
 ## Turn a website into an app
 
 1. Open Forge and click **Turn a website into an app**.
@@ -24,6 +50,41 @@ before publishing — all from one interface.
 Under the hood this generates a minimal Tauri project whose main window points
 directly at your URL (see `src-tauri/src/backend/web_app.rs`). Default app icons
 are included so the project builds out of the box; you can replace them later.
+
+## Features
+
+Forge wraps the full Tauri workflow in a point-and-click interface. Items marked
+**(Pro)** are gated for the Free tier (see
+[License/tier behavior](#licensetier-behavior-current)).
+
+- **Turn a website into an app** — generate a build-ready Tauri project that
+  opens your site in a native window, from just a URL and a name
+  (`WebsiteToAppForm`, `src-tauri/src/backend/web_app.rs`).
+- **Project discovery & registration** — scan a folder for existing Tauri apps
+  and add them to Forge (`scan_directory`, `detect_tauri_status`,
+  `register_project`).
+- **New project scaffolding** — create a fresh Tauri app or initialize Tauri in
+  an existing folder (`create_project`, `init_tauri`).
+- **Environment checker** — verify Rust, Cargo, Node, the Tauri CLI, and your
+  OS build dependencies, with plain-language fixes (`check_environment`,
+  `EnvironmentCheck`).
+- **Safe config editing** — edit `tauri.conf.json` with validation, a diff
+  preview, automatic backup, and atomic writes (`ConfigEditor`,
+  `web/src/lib/diff.ts`, `src-tauri/src/backend/config_manager.rs`).
+- **Builds with live logs** — run dev or release builds and stream output to an
+  in-app terminal; stop processes gracefully (`run_dev`, `run_build`,
+  `kill_process`; `BuildOrchestrator`, `Terminal`).
+- **Build artifacts** — locate the installers a build produced
+  (`collect_artifacts`).
+- **Workspaces** *(Pro)* — group related apps and act on them together
+  (`WorkspaceView`).
+- **Build presets & orchestration** *(Pro)* — save and replay multi-project
+  build sequences (`save_build_preset`, `run_build_preset`).
+- **Build history** *(Pro)* — keep a record of past builds (`get_build_history`).
+- **Publish dashboard** *(Pro)* — a pre-release readiness checklist and platform
+  matrix (`DeployDashboard`, `get_deploy_status`).
+- **Auto-updates** — built apps can check for and install signed updates from
+  GitHub Releases (`UpdateChecker`).
 
 ## Current status
 
@@ -41,8 +102,12 @@ Forge is under active development. The repository currently includes:
 ## Repository layout
 
 - `src-tauri/` — Rust backend (Tauri app, IPC handlers, state, license checks)
-- `web/` — React UI and frontend API wrappers
+- `src-tauri/src/backend/` — feature modules (`web_app`, `project_manager`,
+  `config_manager`, `process_manager`, `license`, …)
+- `web/` — React UI and frontend API wrappers (`web/src/api/api.ts`)
+- `.github/workflows/ci.yml` — frontend + backend checks on every push and PR
 - `.github/workflows/release.yml` — draft release pipeline on `v*` tags
+- `CHANGELOG.md`, `FORGE_IMPLEMENTATION_PLAN.md` — history and roadmap
 
 ## Local development
 
@@ -65,7 +130,8 @@ node --version
 
 ### First-time setup
 
-Forge's frontend lives in `web/`, so install dependencies there first.
+Forge's frontend lives in `web/`, so install dependencies there first. The
+project pins Yarn via `packageManager`, so Corepack is the recommended path.
 
 #### Option A (recommended): Yarn via Corepack
 
@@ -88,7 +154,7 @@ npm install
 
 ```bash
 cd web
-npm run dev
+yarn dev      # or: npm run dev
 ```
 
 This starts the React dev server without launching the desktop shell.
@@ -162,7 +228,8 @@ cargo test
 
 ## License/tier behavior (current)
 
-- Free tier limits project count and gates selected premium features.
+- Free tier limits project count (currently 2) and gates selected premium
+  features.
 - Pro/Team unlock gated feature surfaces.
 - License status is persisted in `~/.forge/license.json` and app state in
   `~/.forge/forge.json`.
@@ -175,8 +242,8 @@ release workflow. Releases are created as **drafts** by default.
 ### Auto-updater
 
 Forge ships with the Tauri updater. Built apps check
-`https://github.com/<owner>/Forge/releases/latest/download/latest.json` and can
-self-update from signed releases (see **Settings → Updates**).
+`https://github.com/Blackmarket-coa/Forge/releases/latest/download/latest.json`
+and can self-update from signed releases (see **Settings → Updates**).
 
 Updater artifacts must be signed. Generate a keypair once:
 
