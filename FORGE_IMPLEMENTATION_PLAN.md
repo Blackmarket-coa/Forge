@@ -25,13 +25,13 @@ Goal: rename Tilt identity to Forge without behavior changes.
 - Remove stale screenshots.
 
 ### String replacement sweep
-- `forge` → `forge`
-- `Forge` → `Forge`
-- `forge` → `forge`
+- `tilt` → `forge`
+- `Tilt` → `Forge`
+- `TILT` → `FORGE`
 
 ### Exit criteria
-- [ ] `npm install` passes.
-- [ ] `npm run tauri dev` launches with Forge name.
+- [x] `yarn install` passes.
+- [x] `cargo tauri dev` launches with the Forge name.
 
 ## Phase 1 — Remove Tilt-Domain Logic (Days 1–2)
 
@@ -59,8 +59,8 @@ Goal: keep reusable app shell patterns, remove Tilt/Kubernetes service concepts.
 - Replace IPC client APIs and TypeScript models with Forge equivalents.
 
 ### Exit criteria
-- [ ] App compiles with no Tilt command handlers/components referenced.
-- [ ] App opens and basic navigation works with new state model.
+- [x] App compiles with no Tilt command handlers/components referenced.
+- [x] App opens and basic navigation works with new state model.
 
 ## Phase 2 — Free Tier Features (Days 3–7)
 

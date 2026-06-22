@@ -10,6 +10,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version-sync:
+    name: Version sync (Cargo.toml ↔ tauri.conf.json)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version sync
+        run: sh scripts/check-version-sync.sh
+
   frontend:
     name: Frontend (lint, types, tests)
     runs-on: ubuntu-latest
@@ -28,9 +36,16 @@ jobs:
       - name: Lint, format, and type-check
         run: yarn run check
       - name: Unit tests
-        run: yarn run test --watchAll=false
+        run: yarn run test --watchAll=false --coverage
         env:
           CI: "true"
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: web/coverage
+          if-no-files-found: ignore
 
   backend:
     name: Backend (fmt, clippy, tests)
