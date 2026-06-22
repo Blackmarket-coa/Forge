@@ -6,6 +6,10 @@ on:
 
 jobs:
   build:
+    permissions:
+      # tauri-action needs write access to create the draft release and upload
+      # the installers + latest.json updater manifest.
+      contents: write
     strategy:
       matrix:
         platform: [macos-latest, ubuntu-22.04, windows-latest]
@@ -25,7 +29,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libsoup-3.0-dev
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

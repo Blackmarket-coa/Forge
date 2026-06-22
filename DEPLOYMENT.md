@@ -97,10 +97,12 @@ If a bad release was already published:
 
 | Pipeline | Trigger | Jobs |
 |----------|---------|------|
-| GitHub Actions `release.yml` | Push `v*` tag | Cross-platform installers, draft release |
-| CircleCI | Push to any branch | JS tests, Go tests, integration tests, linting |
+| GitHub Actions `ci.yml` | Push to any branch / PR | Version-sync check; frontend lint, types, tests (+coverage artifact); backend `cargo fmt`/`clippy`/`test` |
+| GitHub Actions `release.yml` | Push `v*` tag | Cross-platform signed installers + `latest.json`, draft release |
 
-Slack notifications for `master` branch failures are configured in CircleCI.
+The `version-sync` job runs `scripts/check-version-sync.sh`, which fails the
+build if `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` disagree on the
+version — so the manual two-file bump in step 1 above is enforced by CI.
 
 ## Secrets
 
@@ -114,7 +116,7 @@ Never commit `.env` files.  `.env` is listed in `.gitignore`.
 
 ## Checklist before publishing a release
 
-- [ ] Version bumped in `Cargo.toml` and `tauri.conf.json`
+- [ ] Version bumped in `Cargo.toml` and `tauri.conf.json` (`sh scripts/check-version-sync.sh` passes)
 - [ ] `CHANGELOG.md` updated
 - [ ] All CI checks green on the release commit
 - [ ] `KEYGEN_ACCOUNT_ID` set to production account in build environment
