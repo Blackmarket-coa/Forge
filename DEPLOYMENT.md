@@ -26,10 +26,10 @@ missing or placeholder values.
 ## Local development
 
 ```sh
-# Install JS dependencies
-yarn install
+# Install JS dependencies (frontend lives in web/)
+cd web && yarn install
 
-# Start the Tauri dev server (hot-reload frontend + Rust backend)
+# Start the Tauri dev server (hot-reload frontend + Rust backend), from the repo root
 cargo tauri dev
 ```
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+- Docs: corrected `DEPLOYMENT.md`'s local dev instructions (JS deps live in
+  `web/`, not the repo root), filled in the README's updater URL placeholder,
+  and synced `package.json`/`Cargo.toml` descriptions with the product's
+  current website-to-app framing.
+- Marked `FORGE_IMPLEMENTATION_PLAN.md` phases 2–4 as complete to match the
+  shipped feature set (config editor, build orchestrator, workspaces, deploy
+  dashboard, mobile build paths, license gating, auto-updater).
+
 ### Added
 - Custom design system: themeable design tokens (dark/light) and a reusable
   `ui/` primitive library (Button, Input, Select, Checkbox, Tabs, Collapsible,

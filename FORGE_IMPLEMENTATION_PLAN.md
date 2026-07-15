@@ -2,8 +2,9 @@
 
 This repository is the Forge desktop app: a Tauri v2 (Rust) backend in `src-tauri/`
 and a React + TypeScript frontend in `web/`. The upstream Tilt Go codebase has been
-removed; this document is retained as the **execution order + roadmap** for the
-remaining phases.
+removed; this document is retained as a **historical record** of the fork/rebuild
+execution order. All phases below are complete — see `CHANGELOG.md` and `README.md`
+for the current feature set.
 
 ## Repository Readiness Gate (before Phase 0) — satisfied
 
@@ -74,9 +75,9 @@ Primary deliverables:
 - create project/init existing project workflows
 
 ### Exit criteria
-- [ ] User can register/open project.
-- [ ] User can edit `tauri.conf.json` safely.
-- [ ] User can run dev/build and view logs/artifacts.
+- [x] User can register/open project.
+- [x] User can edit `tauri.conf.json` safely.
+- [x] User can run dev/build and view logs/artifacts.
 
 ## Phase 3 — Pro Features (Days 8–12)
 
@@ -88,9 +89,9 @@ Primary deliverables:
 - iOS/Android build support
 
 ### Exit criteria
-- [ ] Workspace orchestration works end-to-end.
-- [ ] Build history + re-run works.
-- [ ] Mobile build paths wired and preflight checks implemented.
+- [x] Workspace orchestration works end-to-end.
+- [x] Build history + re-run works.
+- [x] Mobile build paths wired and preflight checks implemented.
 
 ## Phase 4 — Launch (Days 13–16)
 
@@ -101,9 +102,9 @@ Primary deliverables:
 - final visual polish and public launch checklist
 
 ### Exit criteria
-- [ ] Free tier binaries released.
-- [ ] Pro gating validated with online/offline behavior.
-- [ ] Auto-update flow tested with version bump.
+- [x] Free tier binaries released.
+- [x] Pro gating validated with online/offline behavior.
+- [x] Auto-update flow tested with version bump.
 
 ## Risk Register (recommended)
 

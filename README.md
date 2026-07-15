@@ -175,8 +175,8 @@ release workflow. Releases are created as **drafts** by default.
 ### Auto-updater
 
 Forge ships with the Tauri updater. Built apps check
-`https://github.com/<owner>/Forge/releases/latest/download/latest.json` and can
-self-update from signed releases (see **Settings → Updates**).
+`https://github.com/blackmarket-coa/Forge/releases/latest/download/latest.json`
+and can self-update from signed releases (see **Settings → Updates**).
 
 Updater artifacts must be signed. Generate a keypair once:
 
