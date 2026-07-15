@@ -572,6 +572,7 @@ pub async fn get_build_history(
 
 #[tauri::command]
 pub async fn get_deploy_status(workspace_id: String) -> Result<serde_json::Value, String> {
+    crate::backend::env_path::ensure_cargo_bin_in_path();
     let state = load_state().map_err(|e| e.to_string())?;
     let projects: Vec<ProjectMeta> = state
         .projects
@@ -734,6 +735,10 @@ pub async fn get_deploy_status(workspace_id: String) -> Result<serde_json::Value
 
 #[tauri::command]
 pub async fn check_environment() -> Result<serde_json::Value, String> {
+    // Re-run per check so tools installed after launch (e.g. rustup while
+    // Forge is open) are picked up by the "Check again" button.
+    crate::backend::env_path::ensure_cargo_bin_in_path();
+
     fn check_command(cmd: &str, args: &[&str]) -> serde_json::Value {
         match Command::new(cmd).args(args).output() {
             Ok(out) if out.status.success() => {
@@ -751,13 +756,24 @@ pub async fn check_environment() -> Result<serde_json::Value, String> {
 
     let mut platform_deps = Vec::new();
     if cfg!(target_os = "linux") {
-        let webkit = Command::new("dpkg")
-            .args(["-l", "libwebkit2gtk-4.1-dev"])
-            .output();
-
-        let installed = matches!(webkit, Ok(out) if out.status.success());
+        // pkg-config probes the actual library Tauri links against and works
+        // across distros; the dpkg fallback keeps Debian/Ubuntu covered when
+        // pkg-config itself isn't installed.
+        let via_pkg_config = Command::new("pkg-config")
+            .args(["--exists", "webkit2gtk-4.1"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let via_dpkg = || {
+            Command::new("dpkg")
+                .args(["-l", "libwebkit2gtk-4.1-dev"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        };
+        let installed = via_pkg_config || via_dpkg();
         platform_deps.push(json!({
-            "name": "libwebkit2gtk-4.1-dev",
+            "name": "webkit2gtk-4.1 development libraries",
             "installed": installed
         }));
     }

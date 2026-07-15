@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core"
+import { invoke, isTauri } from "@tauri-apps/api/core"
+import { openUrl } from "@tauri-apps/plugin-opener"
 
 export interface ProjectMeta {
   id: string
@@ -98,6 +99,15 @@ export async function killProcess(processId: string): Promise<void> {
 }
 export async function checkEnvironment(): Promise<any> {
   return invoke("check_environment")
+}
+
+/** Open a URL in the user's default browser (Tauri) or a new tab (plain browser dev). */
+export async function openExternal(url: string): Promise<void> {
+  if (isTauri()) {
+    await openUrl(url)
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
 }
 export async function collectArtifacts(projectPath: string): Promise<any[]> {
   return invoke("collect_artifacts", { projectPath })

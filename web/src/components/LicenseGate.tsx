@@ -3,6 +3,7 @@ import { useSnackbar } from "notistack"
 import { useAppState } from "../providers/AppStateProvider"
 import { isFeatureAvailable } from "../lib/tier"
 import { Button } from "./ui/button"
+import { ExternalLink } from "./ui/external-link"
 import { Input } from "./ui/input"
 import styles from "./LicenseGate.module.scss"
 
@@ -75,14 +76,12 @@ export default function LicenseGate({
               <Button variant="primary" onClick={() => setShowInput(true)}>
                 Enter License Key
               </Button>
-              <a
+              <ExternalLink
                 href="https://forge.dev/pricing"
-                target="_blank"
-                rel="noreferrer"
                 className={styles.link}
               >
                 See plans
-              </a>
+              </ExternalLink>
             </div>
           )}
         </div>

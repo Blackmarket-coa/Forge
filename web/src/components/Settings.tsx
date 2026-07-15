@@ -7,6 +7,7 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
 import { ConfirmDialog } from "./ui/dialog"
+import { ExternalLink } from "./ui/external-link"
 import { Field } from "./ui/field"
 import { Input } from "./ui/input"
 import { PageHeader } from "./ui/page-header"
@@ -95,13 +96,9 @@ export default function Settings() {
           </Field>
 
           <div className={styles.licenseFooter}>
-            <a
-              href="https://forge.dev/pricing"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <ExternalLink href="https://forge.dev/pricing">
               View pricing
-            </a>
+            </ExternalLink>
             {licenseStatus.key_masked && (
               <Button
                 variant="danger"

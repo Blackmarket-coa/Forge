@@ -3,6 +3,7 @@ import { checkEnvironment } from "../api/api"
 import { Badge } from "./ui/badge"
 import { Banner } from "./ui/banner"
 import { Button } from "./ui/button"
+import { ExternalLink } from "./ui/external-link"
 import { Spinner } from "./ui/spinner"
 import styles from "./EnvironmentCheck.module.scss"
 
@@ -36,13 +37,9 @@ const TOOLS: ToolInfo[] = [
     fix: (
       <>
         Install it from{" "}
-        <a
-          href="https://www.rust-lang.org/tools/install"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <ExternalLink href="https://www.rust-lang.org/tools/install">
           rust-lang.org
-        </a>
+        </ExternalLink>
         .
       </>
     ),
@@ -60,10 +57,8 @@ const TOOLS: ToolInfo[] = [
     fix: (
       <>
         Optional. Install from{" "}
-        <a href="https://nodejs.org" target="_blank" rel="noreferrer">
-          nodejs.org
-        </a>{" "}
-        if you build a blank project.
+        <ExternalLink href="https://nodejs.org">nodejs.org</ExternalLink> if you
+        build a blank project.
       </>
     ),
   },

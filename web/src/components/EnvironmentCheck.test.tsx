@@ -5,6 +5,7 @@ import { checkEnvironment } from "../api/api"
 
 jest.mock("../api/api", () => ({
   checkEnvironment: jest.fn(),
+  openExternal: jest.fn(),
 }))
 
 const mockedCheck = checkEnvironment as jest.MockedFunction<

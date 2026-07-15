@@ -22,6 +22,8 @@ log = "0.4"
 env_logger = "0.11"
 sentry = { version = "0.34", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 tauri-plugin-dialog = "2.6.0"
+tauri-plugin-opener = "2"
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
