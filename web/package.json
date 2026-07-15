@@ -62,5 +62,5 @@
     "node": ">=20"
   },
   "packageManager": "yarn@4.9.3",
-  "description": "The visual project manager for Tauri apps"
+  "description": "Turn websites into desktop apps and manage Tauri projects, without writing code"
 }

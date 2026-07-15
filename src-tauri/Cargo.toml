@@ -2,7 +2,7 @@
 name = "forge"
 version = "0.1.0"
 edition = "2021"
-description = "Visual project manager for Tauri apps"
+description = "Turn websites into desktop apps and manage Tauri projects, without writing code"
 
 [lib]
 name = "forge_lib"
