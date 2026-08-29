@@ -17,7 +17,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::backend::errors::ForgeError;
-use crate::backend::extension_manifest::{self, canonical_json, ExtensionManifest};
+use crate::backend::extension_manifest::{self, canonical_json};
 use crate::backend::fs_util::write_atomic;
 use crate::backend::web_app::slug;
 

@@ -13,6 +13,7 @@ export function isFeatureAvailable(feature: string, tier: Tier): boolean {
     "build_history",
     "deploy_dashboard",
     "plugin_browser",
+    "extension_publish",
   ]
   if (proFeatures.includes(feature)) return tier !== "free"
   return true

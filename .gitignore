@@ -32,6 +32,9 @@
 
 # Env files (copy .env.example -> .env)
 .env
+# web/.env carries only the public REACT_APP_VERSION (no secrets) and is
+# version-sync-checked; real secrets belong in the root .env, which stays ignored.
+!web/.env
 .env.local
 .env.development.local
 .env.test.local

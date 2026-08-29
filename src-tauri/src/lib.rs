@@ -49,5 +49,12 @@ pub fn register_commands(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
             backend::ipc::run_build_preset,
             backend::ipc::get_build_history,
             backend::ipc::get_deploy_status,
+            backend::ipc::scaffold_extension,
+            backend::ipc::validate_extension,
+            backend::ipc::package_extension,
+            backend::ipc::publish_extension,
+            backend::ipc::browse_plugins,
+            backend::ipc::get_fbm_status,
+            backend::ipc::set_fbm_config,
         ])
 }

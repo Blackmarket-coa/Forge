@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added (W3 — extension studio MVP)
+
+- Extensions view: scaffold a BMC extension (Featured Vendor Widget or blank
+  template), validate the shared extension manifest, package with
+  deterministic digests, publish through a FreeBlackMarket seller account
+  (FBM signs at publish — Forge never holds keys), and browse the public
+  plugin registry. Pro-gated publish (`extension_publish`) and browse
+  (`plugin_browser` — the previously dangling paywall key, now real).
+- Rust: `extension_manifest`/`semver` (schema mirror + SemVer §11 precedence
+  sharing FBM's test vectors), `extension_scaffold`, `extension_package`,
+  `fbm_client` (per-machine `~/.forge/fbm.json`, token masked), seven new IPC
+  commands.
+- The deploy dashboard nav is renamed "Release readiness" (real publishing
+  now lives in Extensions); `web/.env` carries `REACT_APP_VERSION` and
+  `scripts/check-version-sync.sh` now checks all three version sources.
+
 ### Fixed
 - Docs: corrected `DEPLOYMENT.md`'s local dev instructions (JS deps live in
   `web/`, not the repo root), filled in the README's updater URL placeholder,

@@ -227,3 +227,85 @@ export async function getLicenseStatus(): Promise<LicenseStatus> {
 export async function clearLicense(): Promise<LicenseStatus> {
   return invoke("clear_license")
 }
+
+// ---------------------------------------------------------------------------
+// Extensions (W3): scaffold → validate → package → publish → browse.
+// ---------------------------------------------------------------------------
+
+export interface ExtensionDigests {
+  manifestSha256: string
+  codeSha256?: string
+  payloadSha256?: string
+  assetHashes: Record<string, string>
+}
+
+export interface PackageResult {
+  distDir: string
+  digests: ExtensionDigests
+  issues: string[]
+}
+
+export interface PublishOutcome {
+  listingId: string
+  pluginSlug?: string | null
+  pluginVersion?: string | null
+  envelope: unknown
+}
+
+export interface FbmStatus {
+  configured: boolean
+  api_base_url?: string | null
+  seller_token_masked?: string | null
+}
+
+export async function scaffoldExtension(
+  parentDir: string,
+  name: string,
+  template?: string
+): Promise<string> {
+  return invoke("scaffold_extension", { parentDir, name, template })
+}
+
+export async function validateExtension(
+  projectPath: string
+): Promise<string[]> {
+  return invoke("validate_extension", { projectPath })
+}
+
+export async function packageExtension(
+  projectPath: string
+): Promise<PackageResult> {
+  return invoke("package_extension", { projectPath })
+}
+
+export async function publishExtension(
+  projectPath: string,
+  codeBlobUrl?: string
+): Promise<PublishOutcome> {
+  return invoke("publish_extension", { projectPath, codeBlobUrl })
+}
+
+export async function browsePlugins(category?: string): Promise<{
+  count: number
+  plugins: Array<{
+    slug: string
+    name: string
+    category: string
+    description: string
+    version: string
+    install_count: number
+  }>
+}> {
+  return invoke("browse_plugins", { category })
+}
+
+export async function getFbmStatus(): Promise<FbmStatus> {
+  return invoke("get_fbm_status")
+}
+
+export async function setFbmConfig(
+  apiBaseUrl?: string,
+  sellerToken?: string
+): Promise<FbmStatus> {
+  return invoke("set_fbm_config", { apiBaseUrl, sellerToken })
+}

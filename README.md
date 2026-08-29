@@ -32,6 +32,13 @@ Forge is under active development. The repository currently includes:
 - A **Tauri v2 backend** (`src-tauri/`) with IPC commands for project discovery,
   config read/write/validation, process execution, build orchestration, deploy
   readiness checks, and local state persistence.
+- A **BMC extension studio** (W3): scaffold an extension from a template
+  (Featured Vendor Widget or blank), validate the shared extension manifest,
+  package with deterministic digests, and publish into the FreeBlackMarket
+  plugin registry through your seller account — FBM signs at publish, Forge
+  never holds signing keys. Connection config lives in `~/.forge/fbm.json`;
+  the contract is `docs/contracts/extension-manifest.md` in
+  `Blackmarket-coa/free-black-market`.
 - A **React frontend** (`web/src/`) for project browsing, workspace views,
   build orchestration, deploy dashboard, config editing, and settings.
 - Commercial tier plumbing (Free/Pro/Team) with local license cache and Keygen
