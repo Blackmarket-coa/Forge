@@ -25,8 +25,9 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
 ## Queued fixes
 
 - ~~`plugin_browser` gates a feature that does not exist~~ **resolved (W3)**: the Extensions
-  view's registry browse implements it against FBM's public `/store/plugins`; publishing has
-  its own `extension_publish` Pro key.
+  view's registry browse implements it against FBM's public `/store/plugins` (sent with the
+  storefront publishable key — Medusa requires one on every `/store/*` route; it is a public
+  key, configured next to the seller token); publishing has its own `extension_publish` Pro key.
 - Stack modernization (React 17/CRA/TS 4.4 → React 18/Vite/TS 5), already recommended by
   `PRODUCTION_READINESS.md`, is queued behind the W3 MVP.
 - Set a real `KEYGEN_ACCOUNT_ID` before any licensing-dependent release; validation always

@@ -256,6 +256,8 @@ export interface FbmStatus {
   configured: boolean
   api_base_url?: string | null
   seller_token_masked?: string | null
+  /** Storefront publishable key — public by design, shown in full. */
+  publishable_key?: string | null
 }
 
 export async function scaffoldExtension(
@@ -305,7 +307,8 @@ export async function getFbmStatus(): Promise<FbmStatus> {
 
 export async function setFbmConfig(
   apiBaseUrl?: string,
-  sellerToken?: string
+  sellerToken?: string,
+  publishableKey?: string
 ): Promise<FbmStatus> {
-  return invoke("set_fbm_config", { apiBaseUrl, sellerToken })
+  return invoke("set_fbm_config", { apiBaseUrl, sellerToken, publishableKey })
 }

@@ -38,6 +38,7 @@ export default function ExtensionsView() {
   const [fbm, setFbm] = useState<FbmStatus | null>(null)
   const [draftBase, setDraftBase] = useState("")
   const [draftToken, setDraftToken] = useState("")
+  const [draftPublishable, setDraftPublishable] = useState("")
 
   const [name, setName] = useState("")
   const [template, setTemplate] = useState("featured-vendor-widget")
@@ -65,6 +66,7 @@ export default function ExtensionsView() {
       const status = await getFbmStatus()
       setFbm(status)
       setDraftBase(status.api_base_url ?? "")
+      setDraftPublishable(status.publishable_key ?? "")
     } catch {
       setFbm(null)
     }
@@ -89,7 +91,7 @@ export default function ExtensionsView() {
 
   const onSaveFbm = () =>
     run("settings", async () => {
-      const status = await setFbmConfig(draftBase, draftToken)
+      const status = await setFbmConfig(draftBase, draftToken, draftPublishable)
       setFbm(status)
       setDraftToken("")
       enqueueSnackbar(
@@ -195,6 +197,16 @@ export default function ExtensionsView() {
             value={draftToken}
             onChange={(e) => setDraftToken(e.target.value)}
             placeholder="paste token"
+          />
+        </Field>
+        <Field
+          label="Publishable key"
+          help="The storefront publishable key (public) — needed to browse the registry."
+        >
+          <Input
+            value={draftPublishable}
+            onChange={(e) => setDraftPublishable(e.target.value)}
+            placeholder="pk_..."
           />
         </Field>
         <Button onClick={onSaveFbm} disabled={busy !== null}>

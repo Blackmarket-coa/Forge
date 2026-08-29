@@ -158,7 +158,7 @@ pub fn package_extension(project_path: &Path) -> Result<PackageResult, ForgeErro
         &dist_dir.join("digests.json"),
         format!("{digests_pretty}\n").as_bytes(),
     )?;
-    for (rel, _hash) in &digests.asset_hashes {
+    for rel in digests.asset_hashes.keys() {
         let src = project_path.join("assets").join(rel);
         let dst = dist_dir.join("assets").join(rel);
         write_atomic(&dst, &fs::read(&src)?)?;

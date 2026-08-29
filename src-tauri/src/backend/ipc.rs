@@ -1025,6 +1025,7 @@ pub async fn get_fbm_status() -> Result<crate::backend::fbm_client::FbmStatus, S
 pub async fn set_fbm_config(
     api_base_url: Option<String>,
     seller_token: Option<String>,
+    publishable_key: Option<String>,
 ) -> Result<crate::backend::fbm_client::FbmStatus, String> {
     // Empty strings clear a field; None leaves it unchanged.
     let mut config = crate::backend::fbm_client::read_config().map_err(String::from)?;
@@ -1040,6 +1041,13 @@ pub async fn set_fbm_config(
             None
         } else {
             Some(token)
+        };
+    }
+    if let Some(key) = publishable_key {
+        config.publishable_key = if key.trim().is_empty() {
+            None
+        } else {
+            Some(key)
         };
     }
     crate::backend::fbm_client::write_config(&config).map_err(String::from)?;

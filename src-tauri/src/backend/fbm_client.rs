@@ -5,8 +5,9 @@
 //! `free-black-market/docs/contracts/extension-manifest.md`).
 //!
 //! Configuration lives per-machine in `~/.forge/fbm.json`
-//! (`{ "api_base_url": "...", "seller_token": "..." }`) — never in project
-//! files; the token is masked in every log/status surface like license keys.
+//! (`{ "api_base_url": "...", "seller_token": "...", "publishable_key": "..." }`)
+//! — never in project files; the seller token is masked in every log/status
+//! surface like license keys (the publishable key is public by design).
 //! Dark by default: with no config present, publish/browse return a typed,
 //! plain-language error pointing at Settings instead of making any request.
 
@@ -25,6 +26,10 @@ use crate::backend::web_app::slug;
 pub struct FbmConfig {
     pub api_base_url: Option<String>,
     pub seller_token: Option<String>,
+    /// FBM storefront publishable key — public by design (it ships in
+    /// storefronts), but required: Medusa rejects every `/store/*` request
+    /// without one, and registry browsing reads `/store/plugins`.
+    pub publishable_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +38,8 @@ pub struct FbmStatus {
     pub api_base_url: Option<String>,
     /// Masked (`first6...last4`) — the raw token never leaves the backend.
     pub seller_token_masked: Option<String>,
+    /// Shown in full — the publishable key is public by design.
+    pub publishable_key: Option<String>,
 }
 
 fn config_path() -> Result<PathBuf, ForgeError> {
@@ -85,6 +92,7 @@ pub fn status() -> Result<FbmStatus, ForgeError> {
         configured,
         api_base_url: config.api_base_url.clone(),
         seller_token_masked: config.seller_token.as_deref().map(mask_token),
+        publishable_key: config.publishable_key.clone(),
     })
 }
 
@@ -102,6 +110,16 @@ fn require_token(config: &FbmConfig) -> Result<String, ForgeError> {
         Some(token) if !token.trim().is_empty() => Ok(token.trim().to_string()),
         _ => Err(ForgeError::ConfigInvalid(
             "FreeBlackMarket isn't configured yet — add your seller token in Settings.".to_string(),
+        )),
+    }
+}
+
+fn require_publishable_key(config: &FbmConfig) -> Result<String, ForgeError> {
+    match config.publishable_key.as_deref() {
+        Some(key) if !key.trim().is_empty() => Ok(key.trim().to_string()),
+        _ => Err(ForgeError::ConfigInvalid(
+            "Registry browsing needs the FreeBlackMarket publishable key — add it in Settings."
+                .to_string(),
         )),
     }
 }
@@ -253,12 +271,14 @@ pub async fn publish_extension(
     })
 }
 
-/// Read-only registry browse against the PUBLIC list route (needs only the
-/// base URL) — the real implementation of the long-dead `plugin_browser`
-/// paywall entry.
+/// Read-only registry browse against the public list route — the real
+/// implementation of the long-dead `plugin_browser` paywall entry. Needs the
+/// base URL plus the storefront publishable key (Medusa gates `/store/*`
+/// behind one; it is a public key, not a secret).
 pub async fn browse_plugins(category: Option<&str>) -> Result<Value, ForgeError> {
     let config = read_config()?;
     let base = require_base_url(&config)?;
+    let publishable_key = require_publishable_key(&config)?;
     let mut url = format!("{base}/store/plugins");
     if let Some(cat) = category {
         url.push_str(&format!("?category={cat}"));
@@ -266,6 +286,7 @@ pub async fn browse_plugins(category: Option<&str>) -> Result<Value, ForgeError>
     let client = reqwest::Client::new();
     let response = client
         .get(&url)
+        .header("x-publishable-api-key", publishable_key)
         .send()
         .await
         .map_err(|e| ForgeError::ProcessError(format!("registry browse failed: {e}")))?;
@@ -293,11 +314,23 @@ mod tests {
         let config = FbmConfig::default();
         assert!(require_base_url(&config).is_err());
         assert!(require_token(&config).is_err());
+        assert!(require_publishable_key(&config).is_err());
         let config = FbmConfig {
             api_base_url: Some("https://api.fbm.test/".into()),
             seller_token: Some(" tok ".into()),
+            publishable_key: Some(" pk_test ".into()),
         };
         assert_eq!(require_base_url(&config).unwrap(), "https://api.fbm.test");
         assert_eq!(require_token(&config).unwrap(), "tok");
+        assert_eq!(require_publishable_key(&config).unwrap(), "pk_test");
+    }
+
+    #[test]
+    fn configs_written_before_the_publishable_key_still_load() {
+        let config: FbmConfig = serde_json::from_str(
+            r#"{ "api_base_url": "https://api.fbm.test", "seller_token": "tok" }"#,
+        )
+        .unwrap();
+        assert_eq!(config.publishable_key, None);
     }
 }

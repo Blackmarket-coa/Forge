@@ -65,6 +65,7 @@ describe("ExtensionsView", () => {
       configured: true,
       api_base_url: "https://api.fbm.test",
       seller_token_masked: "seller...3456",
+      publishable_key: "pk_test_storefront",
     })
     render(<ExtensionsView />)
     await waitFor(() =>
