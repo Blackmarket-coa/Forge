@@ -3,6 +3,8 @@ pub mod config_manager;
 pub mod env_path;
 pub mod errors;
 pub mod extension_manifest;
+pub mod extension_package;
+pub mod extension_scaffold;
 pub mod fs_util;
 pub mod ipc;
 pub mod license;
