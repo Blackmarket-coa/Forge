@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -1061,4 +1061,105 @@ fn chrono_like_now() -> String {
         .map(|d| d.as_secs())
         .unwrap_or_default();
     secs.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Extensions (W3): scaffold → validate → package → publish → browse.
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn scaffold_extension(
+    parent_dir: String,
+    name: String,
+    template: Option<String>,
+) -> Result<String, String> {
+    let opts = crate::backend::extension_scaffold::ExtensionOptions { name, template };
+    let path =
+        crate::backend::extension_scaffold::scaffold_extension(Path::new(&parent_dir), &opts)?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command]
+pub async fn validate_extension(project_path: String) -> Result<Vec<String>, String> {
+    let (manifest, _raw) = crate::backend::extension_manifest::load(Path::new(&project_path))?;
+    Ok(crate::backend::extension_manifest::validate(&manifest))
+}
+
+#[tauri::command]
+pub async fn package_extension(
+    project_path: String,
+) -> Result<crate::backend::extension_package::PackageResult, String> {
+    Ok(crate::backend::extension_package::package_extension(
+        Path::new(&project_path),
+    )?)
+}
+
+#[tauri::command]
+pub async fn publish_extension(
+    project_path: String,
+    code_blob_url: Option<String>,
+) -> Result<crate::backend::fbm_client::PublishOutcome, String> {
+    // Always package first so the digests + stamped manifest are fresh, and
+    // refuse to publish anything that fails validation.
+    let package = crate::backend::extension_package::package_extension(Path::new(&project_path))?;
+    if !package.issues.is_empty() {
+        return Err(format!(
+            "Fix these before publishing: {}",
+            package.issues.join("; ")
+        ));
+    }
+    let (manifest, raw) = crate::backend::extension_manifest::load(Path::new(&project_path))?;
+    crate::backend::fbm_client::publish_extension(
+        &manifest,
+        &raw,
+        &package.digests,
+        code_blob_url.as_deref(),
+    )
+    .await
+    .map_err(String::from)
+}
+
+#[tauri::command]
+pub async fn browse_plugins(category: Option<String>) -> Result<serde_json::Value, String> {
+    crate::backend::fbm_client::browse_plugins(category.as_deref())
+        .await
+        .map_err(String::from)
+}
+
+#[tauri::command]
+pub async fn get_fbm_status() -> Result<crate::backend::fbm_client::FbmStatus, String> {
+    crate::backend::fbm_client::status().map_err(String::from)
+}
+
+#[tauri::command]
+pub async fn set_fbm_config(
+    api_base_url: Option<String>,
+    seller_token: Option<String>,
+    publishable_key: Option<String>,
+) -> Result<crate::backend::fbm_client::FbmStatus, String> {
+    // Empty strings clear a field; None leaves it unchanged.
+    let mut config = crate::backend::fbm_client::read_config().map_err(String::from)?;
+    if let Some(url) = api_base_url {
+        config.api_base_url = if url.trim().is_empty() {
+            None
+        } else {
+            Some(url)
+        };
+    }
+    if let Some(token) = seller_token {
+        config.seller_token = if token.trim().is_empty() {
+            None
+        } else {
+            Some(token)
+        };
+    }
+    if let Some(key) = publishable_key {
+        config.publishable_key = if key.trim().is_empty() {
+            None
+        } else {
+            Some(key)
+        };
+    }
+    crate::backend::fbm_client::write_config(&config).map_err(String::from)?;
+    crate::backend::fbm_client::status().map_err(String::from)
 }

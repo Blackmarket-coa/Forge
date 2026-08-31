@@ -3,6 +3,7 @@ import AppShell, { NavItem } from "./components/AppShell"
 import ConfigEditor from "./components/ConfigEditor"
 import CreateProjectForm from "./components/CreateProjectForm"
 import DeployDashboard from "./components/DeployDashboard"
+import ExtensionsView from "./components/ExtensionsView"
 import LandingScreen from "./components/LandingScreen"
 import LicenseGate from "./components/LicenseGate"
 import ProjectView from "./components/ProjectView"
@@ -19,6 +20,7 @@ type View =
   | "create"
   | "website"
   | "deploy"
+  | "extensions"
 
 export default function App() {
   const { theme, toggleTheme, tier } = useAppState()
@@ -48,12 +50,15 @@ export default function App() {
   const nav: NavItem[] = useMemo(
     () => [
       { id: "projects", label: "My Apps", icon: "📁" },
+      { id: "extensions", label: "Extensions", icon: "🧩" },
       {
         id: "deploy",
-        label: "Publish",
+        // Renamed from "Publish" — real publishing now lives in Extensions;
+        // this screen is the installer readiness matrix.
+        label: "Release readiness",
         icon: "🚀",
         disabled: !hasWorkspace,
-        hint: "Pick a group of apps first to see what's left before publishing",
+        hint: "Pick a group of apps first to see what's left before releasing",
       },
       { id: "settings", label: "Settings", icon: "⚙️" },
     ],
@@ -61,10 +66,17 @@ export default function App() {
   )
 
   const activeNav =
-    view === "deploy" ? "deploy" : view === "settings" ? "settings" : "projects"
+    view === "deploy"
+      ? "deploy"
+      : view === "extensions"
+      ? "extensions"
+      : view === "settings"
+      ? "settings"
+      : "projects"
 
   const onNavigate = (id: string) => {
     if (id === "projects") setView("landing")
+    else if (id === "extensions") setView("extensions")
     else if (id === "deploy" && hasWorkspace) setView("deploy")
     else if (id === "settings") setView("settings")
   }
@@ -88,6 +100,8 @@ export default function App() {
       )}
 
       {view === "settings" && <Settings />}
+
+      {view === "extensions" && <ExtensionsView />}
 
       {view === "website" && (
         <WebsiteToAppForm

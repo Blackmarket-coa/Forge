@@ -11,15 +11,23 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
   Ed25519 `marketplace-signing`, `digital-product` delivery, and entitlements already exist. The
   remaining platform gap (hook registry + semver handling) closes on the FBM side in workstream
   W3; Forge's side of W3 is the shared extension manifest and the build → sign → publish flow.
-- What exists today is real but scoped: a Tauri v2 project manager with 30 IPC commands, the
+- What exists today is real but scoped: a Tauri v2 project manager (now 37 IPC commands), the
   "website → app" scaffolding flow, and Keygen licensing (still pointed at the demo account).
-  There is no extension/SDK/registry code here yet — the W3 MVP ("Featured Vendor Widget" built
-  in Forge, signed, published to FBM, installed under entitlements) is where that starts.
+  ~~There is no extension/SDK/registry code here yet~~ **W3 landed (2026-08-29)**: the shared
+  extension manifest mirror + semver (`backend/extension_manifest.rs`, `backend/semver.rs` —
+  test vectors shared with FBM's `compat.unit.spec.ts`), the extension scaffolder with the
+  Featured Vendor Widget template, deterministic packaging + digests, the FBM publish client
+  (`backend/fbm_client.rs` — Forge holds NO signing keys; FBM signs at publish per
+  `free-black-market/docs/contracts/extension-manifest.md`), and the Extensions view
+  (scaffold → validate → package → publish → browse). Config lives in `~/.forge/fbm.json`
+  (token masked everywhere); everything fails closed with a Settings pointer until configured.
 
 ## Queued fixes
 
-- `web/src/lib/tier.ts` gates a `plugin_browser` feature that does not exist anywhere in the
-  codebase — remove the paywall entry or implement the browser against FBM's `/store/plugins`.
+- ~~`plugin_browser` gates a feature that does not exist~~ **resolved (W3)**: the Extensions
+  view's registry browse implements it against FBM's public `/store/plugins` (sent with the
+  storefront publishable key — Medusa requires one on every `/store/*` route; it is a public
+  key, configured next to the seller token); publishing has its own `extension_publish` Pro key.
 - Stack modernization (React 17/CRA/TS 4.4 → React 18/Vite/TS 5), already recommended by
   `PRODUCTION_READINESS.md`, is queued behind the W3 MVP.
 - Set a real `KEYGEN_ACCOUNT_ID` before any licensing-dependent release; validation always
