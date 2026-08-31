@@ -70,10 +70,35 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.targetTabs {
+  margin-bottom: var(--space-4);
+}
+
 .targets {
   display: grid;
   gap: var(--space-2);
   margin-bottom: var(--space-4);
+}
+
+.targetRow {
+  display: grid;
+  gap: 2px;
+}
+
+.targetNote {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs, 11px);
+  padding-left: 26px;
+}
+
+.addTargetRow {
+  display: flex;
+  gap: var(--space-2);
+
+  select {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .buildResult {

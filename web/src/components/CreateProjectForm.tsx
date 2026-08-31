@@ -64,9 +64,12 @@ export default function CreateProjectForm({
     void (async () => {
       try {
         const env = await checkEnvironment()
+        const nodeInstalled = (env?.tools || []).some(
+          (t) => t.name === "node" && t.installed
+        )
         setAvailableManagers((prev) => ({
           ...prev,
-          npm: !!env?.node?.installed,
+          npm: nodeInstalled,
         }))
       } catch {
         /* keep defaults */

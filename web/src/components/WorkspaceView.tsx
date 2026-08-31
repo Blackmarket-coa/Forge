@@ -8,6 +8,7 @@ import {
   ProjectMeta,
   Workspace,
 } from "../api/api"
+import { frameworkBadge, projectTargets } from "../lib/frameworks"
 import { isFeatureAvailable } from "../lib/tier"
 import { useAppState } from "../providers/AppStateProvider"
 import LicenseGate from "./LicenseGate"
@@ -161,9 +162,14 @@ export default function WorkspaceView({
                 {project.path}
               </div>
               <div className={styles.cardMeta}>
-                {project.tauri_version && (
-                  <Badge tone="info">Tauri {project.tauri_version}</Badge>
-                )}
+                {projectTargets(project).map((fw) => {
+                  const badge = frameworkBadge(fw)
+                  return (
+                    <Badge key={fw} tone="info">
+                      {badge.emoji} {badge.short}
+                    </Badge>
+                  )
+                })}
                 {project.git_branch && (
                   <Badge tone="neutral">{project.git_branch}</Badge>
                 )}

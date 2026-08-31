@@ -9,7 +9,7 @@ import { Progress } from "./ui/progress"
 import { Spinner } from "./ui/spinner"
 import styles from "./DeployDashboard.module.scss"
 
-const PLATFORMS = ["macOS", "Linux", "Windows", "iOS", "Android"]
+const PLATFORMS = ["macOS", "Linux", "Windows", "Android", "iOS", "Web"]
 
 function statusView(value: string): { label: string; tone: Tone } {
   switch (value) {
@@ -100,12 +100,23 @@ export default function DeployDashboard({
               </thead>
               <tbody>
                 {matrix.map((row: any) => (
-                  <tr key={row.project_id}>
-                    <td className={styles.projectCell}>{row.project_name}</td>
+                  <tr key={`${row.project_id}:${row.framework}`}>
+                    <td className={styles.projectCell}>
+                      {row.project_name}
+                      <span className={styles.frameworkCell}>
+                        {row.framework_label || row.framework}
+                      </span>
+                    </td>
                     {PLATFORMS.map((p) => {
-                      const view = statusView(
-                        row?.statuses?.[p] || "not_targeted"
-                      )
+                      const value = row?.statuses?.[p]
+                      if (!value) {
+                        return (
+                          <td key={p} className={styles.emptyCell}>
+                            —
+                          </td>
+                        )
+                      }
+                      const view = statusView(value)
                       return (
                         <td key={p}>
                           <button
@@ -137,13 +148,13 @@ export default function DeployDashboard({
             <ul className={styles.list}>
               {checklist.map((item: any, idx: number) => (
                 <li key={idx} className={styles.listRow}>
-                  <Badge
-                    tone={item.tauri_initialized ? "success" : "danger"}
-                    dot
-                  >
-                    {item.tauri_initialized ? "Set up" : "Not set up"}
+                  <Badge tone={item.initialized ? "success" : "danger"} dot>
+                    {item.initialized ? "Set up" : "Not set up"}
                   </Badge>
-                  <span>{item.project}</span>
+                  <span>
+                    {item.project}
+                    {item.framework_label ? ` — ${item.framework_label}` : ""}
+                  </span>
                   <Badge tone={item.config_ok ? "success" : "warning"}>
                     {item.config_ok ? "settings ok" : "check settings"}
                   </Badge>

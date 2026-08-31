@@ -8,7 +8,7 @@ import LicenseGate from "./components/LicenseGate"
 import ProjectView from "./components/ProjectView"
 import Settings from "./components/Settings"
 import WebsiteToAppForm from "./components/WebsiteToAppForm"
-import { getProjects, ProjectMeta } from "./api/api"
+import { Framework, getProjects, ProjectMeta } from "./api/api"
 import { useAppState } from "./providers/AppStateProvider"
 
 type View =
@@ -24,6 +24,7 @@ export default function App() {
   const { theme, toggleTheme, tier } = useAppState()
   const [activeProject, setActiveProject] = useState<ProjectMeta | null>(null)
   const [activeWorkspace, setActiveWorkspace] = useState<string>("all")
+  const [configFramework, setConfigFramework] = useState<Framework>("tauri")
   const [view, setView] = useState<View>("landing")
 
   const openProject = (project: ProjectMeta) => {
@@ -123,7 +124,10 @@ export default function App() {
         <ProjectView
           project={activeProject}
           onBack={() => setView("landing")}
-          onOpenConfig={() => setView("config")}
+          onOpenConfig={(framework) => {
+            setConfigFramework(framework)
+            setView("config")
+          }}
         />
       )}
 
@@ -131,6 +135,7 @@ export default function App() {
         <ConfigEditor
           projectPath={activeProject.path}
           projectName={activeProject.name}
+          framework={configFramework}
           onBack={() => setView("project")}
         />
       )}

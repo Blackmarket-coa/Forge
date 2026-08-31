@@ -105,3 +105,15 @@
   color: var(--color-text-subtle);
   font-size: var(--font-size-sm);
 }
+
+.frameworkCell {
+  display: block;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+}
+
+.emptyCell {
+  color: var(--color-text-subtle);
+  text-align: center;
+}

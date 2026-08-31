@@ -73,7 +73,7 @@ export default function LandingScreen({
     <div>
       <PageHeader
         title="My Apps"
-        subtitle="Turn a website into a desktop app, then build and share it."
+        subtitle="Turn a website into desktop, mobile, and web apps, then build and share them."
         actions={
           <>
             <Button
@@ -109,7 +109,7 @@ export default function LandingScreen({
           <EmptyState
             icon="🌐"
             title="Make your first app"
-            description="Have a website? Turn it into a desktop app in two steps — no coding needed. Just enter your web address and a name."
+            description="Have a website? Turn it into desktop and mobile apps in two steps — no coding needed. Just enter your web address and a name."
             action={
               <>
                 <Button variant="primary" onClick={handleOpenWebsite}>

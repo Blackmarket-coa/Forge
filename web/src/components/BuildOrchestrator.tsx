@@ -2,12 +2,14 @@ import React, { useEffect, useState } from "react"
 import { useSnackbar } from "notistack"
 import {
   BuildPreset,
+  Framework,
   getBuildPresets,
   getProjects,
   ProjectMeta,
   runBuildPreset,
   saveBuildPreset,
 } from "../api/api"
+import { frameworkBadge, projectTargets } from "../lib/frameworks"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
@@ -28,6 +30,7 @@ export default function BuildOrchestrator({
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [name, setName] = useState("")
   const [selectedProject, setSelectedProject] = useState("")
+  const [framework, setFramework] = useState<Framework>("tauri")
   const [targets, setTargets] = useState<string[]>(["appimage"])
   const [parallelWithNext, setParallelWithNext] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
@@ -47,6 +50,21 @@ export default function BuildOrchestrator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId])
 
+  const selectedProjectTargets = React.useMemo(() => {
+    const project = projects.find((p) => p.id === selectedProject)
+    return project ? projectTargets(project) : []
+  }, [projects, selectedProject])
+
+  useEffect(() => {
+    if (
+      selectedProjectTargets.length > 0 &&
+      !selectedProjectTargets.includes(framework)
+    ) {
+      setFramework(selectedProjectTargets[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectTargets])
+
   const createPreset = async () => {
     if (!name || !selectedProject) return
     try {
@@ -57,6 +75,7 @@ export default function BuildOrchestrator({
         steps: [
           {
             project_id: selectedProject,
+            framework,
             targets,
             parallel_with_next: parallelWithNext,
           },
@@ -109,6 +128,21 @@ export default function BuildOrchestrator({
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="App type">
+          <Select
+            value={framework}
+            onChange={(e) => setFramework(e.target.value as Framework)}
+          >
+            {(selectedProjectTargets.length > 0
+              ? selectedProjectTargets
+              : (["tauri"] as Framework[])
+            ).map((fw) => (
+              <option key={fw} value={fw}>
+                {frameworkBadge(fw).short}
               </option>
             ))}
           </Select>

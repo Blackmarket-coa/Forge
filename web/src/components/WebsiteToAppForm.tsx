@@ -1,7 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { open } from "@tauri-apps/plugin-dialog"
 import { useSnackbar } from "notistack"
-import { createWebApp, getDefaultAppDir, ProjectMeta } from "../api/api"
+import {
+  createWebApp,
+  Framework,
+  FrameworkInfo,
+  getDefaultAppDir,
+  getFrameworks,
+  ProjectMeta,
+} from "../api/api"
+import { FALLBACK_FRAMEWORKS, frameworkBadge } from "../lib/frameworks"
+import { Badge } from "./ui/badge"
 import { Banner } from "./ui/banner"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
@@ -64,6 +73,9 @@ export default function WebsiteToAppForm({
   const [location, setLocation] = useState("")
   const [width, setWidth] = useState(1200)
   const [height, setHeight] = useState(800)
+  const [frameworks, setFrameworks] =
+    useState<FrameworkInfo[]>(FALLBACK_FRAMEWORKS)
+  const [selected, setSelected] = useState<Framework[]>(["tauri"])
   const [status, setStatus] = useState<"form" | "creating" | "done">("form")
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<ProjectMeta | null>(null)
@@ -73,6 +85,13 @@ export default function WebsiteToAppForm({
       .then(setLocation)
       .catch(() => {
         /* keep empty; user can pick a folder */
+      })
+    void getFrameworks()
+      .then((list) => {
+        if (list.length > 0) setFrameworks(list)
+      })
+      .catch(() => {
+        /* fall back to the static list */
       })
   }, [])
 
@@ -84,14 +103,23 @@ export default function WebsiteToAppForm({
     }
   }
 
+  const toggleFramework = (id: Framework) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+    )
+  }
+
   const preview = previewUrl(url)
   const folder = useMemo(() => previewFolderName(name), [name])
   const canCreate =
-    url.trim().length > 0 && name.trim().length > 0 && location.length > 0
+    url.trim().length > 0 &&
+    name.trim().length > 0 &&
+    location.length > 0 &&
+    selected.length > 0
 
   const pickLocation = async () => {
-    const selected = await open({ directory: true, multiple: false })
-    if (typeof selected === "string") setLocation(selected)
+    const picked = await open({ directory: true, multiple: false })
+    if (typeof picked === "string") setLocation(picked)
   }
 
   const handleCreate = async () => {
@@ -104,6 +132,7 @@ export default function WebsiteToAppForm({
         url: url.trim(),
         width,
         height,
+        frameworks: selected,
       })
       setCreated(project)
       setStatus("done")
@@ -120,10 +149,13 @@ export default function WebsiteToAppForm({
     setNameTouched(false)
     setError(null)
     setCreated(null)
+    setSelected(["tauri"])
     setStatus("form")
   }
 
   if (status === "done" && created) {
+    const createdFrameworks =
+      created.targets?.map((t) => t.framework) || selected
     return (
       <div>
         <Card>
@@ -139,17 +171,27 @@ export default function WebsiteToAppForm({
             <div className={styles.pathPill} title={created.path}>
               {created.path}
             </div>
+            <div className={styles.successBadges}>
+              {createdFrameworks.map((fw) => {
+                const badge = frameworkBadge(fw)
+                return (
+                  <Badge key={fw} tone="info">
+                    {badge.emoji} {badge.short}
+                  </Badge>
+                )
+              })}
+            </div>
 
             <div className={styles.nextSteps}>
               <h3 className={styles.nextTitle}>What&rsquo;s next?</h3>
               <ol className={styles.steps}>
                 <li>
-                  Open your app below to preview it and build an installer you
-                  can share.
+                  Open your app below to preview it and build installers you can
+                  share — each kind of app has its own build options.
                 </li>
                 <li>
-                  Building installers uses free tools (Rust and the Tauri CLI).
-                  Forge checks for these under{" "}
+                  Building uses free tools that depend on the kind of app. Forge
+                  checks for them under{" "}
                   <strong>Settings → Tools on your computer</strong> and tells
                   you how to install anything that&rsquo;s missing.
                 </li>
@@ -177,7 +219,7 @@ export default function WebsiteToAppForm({
       </Button>
       <PageHeader
         title="Turn your website into an app"
-        subtitle="Enter your website address and we'll create a desktop app that opens it. No coding required."
+        subtitle="Enter your website address, pick where your app should run, and we'll create everything. No coding required."
       />
 
       {error && (
@@ -218,6 +260,46 @@ export default function WebsiteToAppForm({
               />
             </Field>
 
+            <Field
+              label="Where should your app run?"
+              help="Pick as many as you like — they all open the same website."
+            >
+              <div className={styles.frameworkList} role="group">
+                {frameworks.map((fw) => {
+                  const active = selected.includes(fw.id)
+                  return (
+                    <button
+                      key={fw.id}
+                      type="button"
+                      className={[
+                        styles.frameworkOption,
+                        active ? styles.frameworkActive : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-pressed={active}
+                      onClick={() => toggleFramework(fw.id)}
+                    >
+                      <span className={styles.frameworkEmoji} aria-hidden>
+                        {frameworkBadge(fw.id).emoji}
+                      </span>
+                      <span className={styles.frameworkText}>
+                        <span className={styles.frameworkLabel}>
+                          {fw.label}
+                        </span>
+                        <span className={styles.frameworkTagline}>
+                          {fw.tagline}
+                        </span>
+                      </span>
+                      <span className={styles.frameworkTick} aria-hidden>
+                        {active ? "✓" : ""}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+
             <Collapsible title="More options (optional)" defaultOpen={false}>
               <div className={styles.body}>
                 <Field
@@ -235,7 +317,10 @@ export default function WebsiteToAppForm({
                     </Button>
                   </div>
                 </Field>
-                <Field label="Window size" help="How big the app window opens.">
+                <Field
+                  label="Window size"
+                  help="How big desktop app windows open."
+                >
                   <div className={styles.sizeRow}>
                     <Input
                       type="number"
@@ -265,6 +350,12 @@ export default function WebsiteToAppForm({
             <dd>{name.trim() || "Your app"}</dd>
             <dt>Opens</dt>
             <dd className={styles.previewUrl}>{preview || "—"}</dd>
+            <dt>App types</dt>
+            <dd>
+              {selected.length > 0
+                ? selected.map((fw) => frameworkBadge(fw).short).join(", ")
+                : "Pick at least one"}
+            </dd>
             <dt>Saved as</dt>
             <dd title={joinPath(location, folder)}>
               {location ? joinPath(location, folder) : folder}

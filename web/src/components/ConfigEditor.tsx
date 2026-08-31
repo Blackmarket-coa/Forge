@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useSnackbar } from "notistack"
-import { readConfig, validateConfig, writeConfig } from "../api/api"
+import { Framework, readConfig, validateConfig, writeConfig } from "../api/api"
 import { diffConfig } from "../lib/diff"
+import {
+  CONFIG_FILE_NAMES,
+  CONFIG_FORMS,
+  frameworkBadge,
+} from "../lib/frameworks"
 import { Banner } from "./ui/banner"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
@@ -35,10 +40,12 @@ const BUNDLE_TARGETS = ["dmg", "appimage", "deb", "nsis", "msi"] as const
 export default function ConfigEditor({
   projectPath,
   projectName,
+  framework = "tauri",
   onBack,
 }: {
   projectPath: string
   projectName?: string
+  framework?: Framework
   onBack?: () => void
 }) {
   const { enqueueSnackbar } = useSnackbar()
@@ -53,7 +60,7 @@ export default function ConfigEditor({
 
   const loadConfig = async () => {
     try {
-      const cfg = await readConfig(projectPath)
+      const cfg = await readConfig(projectPath, framework)
       setConfig(cfg)
       setOriginal(cfg)
       setRawJson(JSON.stringify(cfg, null, 2))
@@ -68,7 +75,7 @@ export default function ConfigEditor({
   useEffect(() => {
     void loadConfig()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectPath])
+  }, [projectPath, framework])
 
   const updateConfig = (next: any) => {
     setConfig(next)
@@ -133,7 +140,7 @@ export default function ConfigEditor({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await writeConfig(projectPath, config)
+      await writeConfig(projectPath, config, framework)
       setOriginal(config)
       setConfirmOpen(false)
       enqueueSnackbar("Configuration saved", { variant: "success" })
@@ -146,7 +153,7 @@ export default function ConfigEditor({
 
   const handleValidate = async () => {
     try {
-      const nextIssues = await validateConfig(projectPath, config)
+      const nextIssues = await validateConfig(projectPath, config, framework)
       setIssues(nextIssues)
       enqueueSnackbar(
         nextIssues.length
@@ -199,8 +206,12 @@ export default function ConfigEditor({
         title="App settings"
         subtitle={
           projectName
-            ? `Name, window, and build options for ${projectName}`
-            : "Name, window, and build options"
+            ? `${
+                frameworkBadge(framework).short
+              } settings for ${projectName} (${CONFIG_FILE_NAMES[framework]})`
+            : `${frameworkBadge(framework).short} settings (${
+                CONFIG_FILE_NAMES[framework]
+              })`
         }
         actions={
           <Tabs
@@ -214,7 +225,43 @@ export default function ConfigEditor({
         }
       />
 
-      {mode === "form" ? (
+      {mode === "form" && framework !== "tauri" ? (
+        <div className={styles.sections}>
+          {(CONFIG_FORMS[framework] || []).map((section) => (
+            <Collapsible key={section.title} title={section.title}>
+              {section.hint && <p className={styles.hint}>{section.hint}</p>}
+              <div className={styles.rows}>
+                {section.fields.map((field) => (
+                  <Field
+                    key={field.path.join(".")}
+                    label={field.label}
+                    help={field.help}
+                  >
+                    <Input
+                      type={field.kind === "number" ? "number" : "text"}
+                      placeholder={field.placeholder}
+                      value={getPath(config, field.path) ?? ""}
+                      onChange={(e) =>
+                        setField(
+                          field.path,
+                          field.kind === "number"
+                            ? Number(e.target.value)
+                            : e.target.value
+                        )
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+            </Collapsible>
+          ))}
+          {(CONFIG_FORMS[framework] || []).length === 0 && (
+            <p className={styles.hint}>
+              Use the JSON tab to edit this file directly.
+            </p>
+          )}
+        </div>
+      ) : mode === "form" ? (
         <div className={styles.sections}>
           <Collapsible title="About your app">
             <p className={styles.hint}>
@@ -438,9 +485,11 @@ export default function ConfigEditor({
       )}
 
       <div className={styles.actions}>
-        <Button variant="ghost" onClick={useRecommendedDefaults}>
-          Use Recommended Defaults
-        </Button>
+        {framework === "tauri" && (
+          <Button variant="ghost" onClick={useRecommendedDefaults}>
+            Use Recommended Defaults
+          </Button>
+        )}
         <Button variant="secondary" onClick={handleValidate}>
           Validate
         </Button>
@@ -463,8 +512,9 @@ export default function ConfigEditor({
         message={
           <div>
             <p className={styles.confirmIntro}>
-              {changes.length} field(s) will be written to tauri.conf.json. A
-              backup (.bak) is created automatically.
+              {changes.length} field(s) will be written to{" "}
+              {CONFIG_FILE_NAMES[framework]}. A backup (.bak) is created
+              automatically.
             </p>
             <ul className={styles.diffList}>
               {changes.map((c) => (
@@ -487,4 +537,11 @@ function format(value: unknown): string {
   if (value === undefined) return "—"
   if (typeof value === "string") return value || '""'
   return JSON.stringify(value)
+}
+
+function getPath(obj: any, path: string[]): any {
+  return path.reduce(
+    (cur, key) => (cur == null ? undefined : cur[key]),
+    obj as any
+  )
 }

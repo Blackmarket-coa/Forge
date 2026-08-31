@@ -57,6 +57,63 @@
   font-size: var(--font-size-sm);
 }
 
+.frameworkList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.frameworkOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-inset);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+
+  &:hover {
+    border-color: var(--color-accent);
+  }
+}
+
+.frameworkActive {
+  border-color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.frameworkEmoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.frameworkText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.frameworkLabel {
+  font-weight: 600;
+}
+
+.frameworkTagline {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.frameworkTick {
+  width: 20px;
+  color: var(--color-accent);
+  font-weight: 700;
+  text-align: center;
+}
+
 .footer {
   display: flex;
   align-items: center;
@@ -111,6 +168,13 @@
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
+}
+
+.successBadges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .nextSteps {
