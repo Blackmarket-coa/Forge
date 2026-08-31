@@ -5,7 +5,15 @@ use crate::backend::project_manager::{ProjectMeta, Workspace};
 /// Increment this constant whenever the ForgeState schema changes in a
 /// backwards-incompatible way.  The loader uses it to detect stale state
 /// files and apply any necessary migrations before deserialising.
-pub const STATE_SCHEMA_VERSION: u32 = 1;
+///
+/// v2: projects carry framework `targets`; build records/steps carry a
+/// `framework` (older entries default to "tauri").
+pub const STATE_SCHEMA_VERSION: u32 = 2;
+
+/// Serde default for records written before multi-framework support.
+pub(crate) fn default_framework() -> String {
+    "tauri".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeState {
@@ -44,6 +52,8 @@ pub struct BuildPreset {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BuildStep {
     pub project_id: String,
+    #[serde(default = "default_framework")]
+    pub framework: String,
     pub targets: Vec<String>,
     pub parallel_with_next: bool,
 }
@@ -60,6 +70,8 @@ pub struct Artifact {
 pub struct BuildRecord {
     pub id: String,
     pub project_id: String,
+    #[serde(default = "default_framework")]
+    pub framework: String,
     pub targets: Vec<String>,
     pub status: String,
     pub started_at: String,

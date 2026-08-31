@@ -1,28 +1,29 @@
+use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use log::{info, warn};
 use serde_json::json;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::app_state::model::{Artifact, BuildPreset, BuildRecord};
 use crate::app_state::store::{load_state, save_state, state_path};
 use crate::backend::config_manager;
+use crate::backend::frameworks::{self, Framework, FrameworkInfo, ToolCheck};
 use crate::backend::fs_util::write_atomic;
 
 /// Cap how many build records we keep on disk so `build_history.json` cannot
 /// grow without bound over the lifetime of a project.
 const MAX_BUILD_HISTORY: usize = 200;
 use crate::backend::license;
-use crate::backend::process_manager::ProcessManager;
+use crate::backend::process_manager::{ProcessExitPayload, ProcessManager, ProcessOutputPayload};
 use crate::backend::project_manager::{
-    detect_tauri_status as detect_status_impl, get_git_info as get_git_info_impl,
-    register_project as register_project_impl, scan_directory as scan_dir_impl, ProjectMeta,
-    Workspace,
+    detect_project_status as detect_status_impl, get_git_info as get_git_info_impl,
+    refresh_project_meta, register_project as register_project_impl,
+    scan_directory as scan_dir_impl, ProjectMeta, Workspace,
 };
 use crate::backend::web_app::{self, WebAppOptions};
 
@@ -69,6 +70,13 @@ fn sync_tier_to_state(tier: &str) -> Result<(), String> {
     save_state(&state).map_err(|e| e.to_string())
 }
 
+/// Parse an optional framework id from the frontend, defaulting to Tauri for
+/// calls that predate multi-framework support.
+fn parse_framework(id: Option<String>) -> Result<Framework, String> {
+    let id = id.unwrap_or_else(|| "tauri".to_string());
+    Framework::from_id(&id).ok_or_else(|| format!("unknown framework: {id}"))
+}
+
 #[tauri::command]
 pub async fn validate_license(key: String) -> Result<license::LicenseStatus, String> {
     let status = license::validate_and_store_license(key).await?;
@@ -90,6 +98,13 @@ pub async fn clear_license() -> Result<license::LicenseStatus, String> {
     Ok(status)
 }
 
+/// Static descriptions of every supported framework — the single source of
+/// truth the UI uses for labels, bundle kinds, dev actions, and tools.
+#[tauri::command]
+pub async fn get_frameworks() -> Result<Vec<FrameworkInfo>, String> {
+    Ok(frameworks::adapters().iter().map(|a| a.info()).collect())
+}
+
 #[tauri::command]
 pub async fn register_project(path: String) -> Result<ProjectMeta, String> {
     let project_path = PathBuf::from(path);
@@ -107,6 +122,10 @@ pub async fn register_project(path: String) -> Result<ProjectMeta, String> {
         .iter_mut()
         .find(|p| p.path == project.path || p.id == project.id)
     {
+        project.id = existing.id.clone();
+        project.workspace_id = existing.workspace_id.clone();
+        project.tags = existing.tags.clone();
+        project.role = existing.role.clone();
         *existing = project.clone();
     } else {
         state.projects.push(project.clone());
@@ -124,6 +143,9 @@ pub async fn get_projects(workspace_id: Option<String>) -> Result<Vec<ProjectMet
         let (branch, dirty) = get_git_info_impl(&project.path).map_err(|e| e.to_string())?;
         project.git_branch = branch;
         project.git_dirty = dirty;
+        // Targets can change outside Forge (or a target added inside it);
+        // keep the cheap detection-derived fields fresh.
+        refresh_project_meta(project);
     }
 
     save_state(&state).map_err(|e| e.to_string())?;
@@ -141,8 +163,10 @@ pub async fn get_projects(workspace_id: Option<String>) -> Result<Vec<ProjectMet
     Ok(projects)
 }
 
+/// Detect a project's framework targets (manifest first, marker probing as a
+/// fallback). Replaces the Tauri-only `detect_tauri_status`.
 #[tauri::command]
-pub async fn detect_tauri_status(path: String) -> Result<serde_json::Value, String> {
+pub async fn detect_project_status(path: String) -> Result<serde_json::Value, String> {
     let status = detect_status_impl(&PathBuf::from(path)).map_err(|e| e.to_string())?;
     serde_json::to_value(status).map_err(|e| e.to_string())
 }
@@ -153,54 +177,77 @@ pub async fn scan_directory(path: String) -> Result<Vec<ProjectMeta>, String> {
 }
 
 #[tauri::command]
-pub async fn read_config(project_path: String) -> Result<serde_json::Value, String> {
-    config_manager::read_config(&PathBuf::from(project_path)).map_err(Into::into)
+pub async fn read_config(
+    project_path: String,
+    framework: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let fw = parse_framework(framework)?;
+    config_manager::read_config(&PathBuf::from(project_path), fw).map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn write_config(project_path: String, config: serde_json::Value) -> Result<(), String> {
-    config_manager::write_config(&PathBuf::from(project_path), &config).map_err(Into::into)
+pub async fn write_config(
+    project_path: String,
+    framework: Option<String>,
+    config: serde_json::Value,
+) -> Result<(), String> {
+    let fw = parse_framework(framework)?;
+    config_manager::write_config(&PathBuf::from(project_path), fw, &config).map_err(Into::into)
 }
 
 #[tauri::command]
 pub async fn validate_config(
     project_path: String,
+    framework: Option<String>,
     config: serde_json::Value,
 ) -> Result<Vec<String>, String> {
-    config_manager::validate_config(&PathBuf::from(project_path), &config).map_err(Into::into)
+    let fw = parse_framework(framework)?;
+    config_manager::validate_config(&PathBuf::from(project_path), fw, &config).map_err(Into::into)
 }
 
+/// Start the framework's preview/dev loop. Returns the process id the
+/// terminal and Stop button use.
 #[tauri::command]
-pub async fn run_dev(project_path: String, app_handle: AppHandle) -> Result<u32, String> {
-    let project_dir = PathBuf::from(&project_path);
-    let process_id = format!("dev:{}", project_path);
+pub async fn run_dev(
+    project_path: String,
+    framework: Option<String>,
+    app_handle: AppHandle,
+) -> Result<String, String> {
+    let fw = parse_framework(framework)?;
+    let root = PathBuf::from(&project_path);
+    let target_dir = frameworks::resolve_target_dir(&root, fw).map_err(|e| e.to_string())?;
+    let adapter = frameworks::adapter(fw);
 
-    let _pm = detect_package_manager(&project_dir);
+    let steps = adapter.dev_steps(&target_dir);
+    if steps.is_empty() {
+        return Err(format!(
+            "{} doesn't have a live preview — build it instead.",
+            adapter.info().label
+        ));
+    }
 
-    info!("run_dev: starting dev server for {project_path}");
+    let process_id = format!("dev:{}:{}", project_path, fw.id());
+    info!("run_dev: starting {} preview for {project_path}", fw.id());
 
     let mut manager = process_manager()
         .lock()
         .map_err(|_| "failed to lock process manager".to_string())?;
-
     manager
-        .spawn_command(
-            &process_id,
-            &project_dir,
-            "cargo",
-            &["tauri", "dev"],
-            &app_handle,
-        )
-        .map_err(|e| e.to_string())
+        .spawn_sequence(&process_id, steps, Arc::new(app_handle))
+        .map_err(|e| e.to_string())?;
+
+    Ok(process_id)
 }
 
 #[tauri::command]
 pub async fn run_build(
     project_path: String,
+    framework: Option<String>,
     targets: Vec<String>,
     app_handle: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    run_build_internal(&project_path, &targets, &app_handle, None)
+    let fw = parse_framework(framework)?;
+    run_build_internal(&project_path, fw, &targets, &app_handle, None)
 }
 
 #[tauri::command]
@@ -281,29 +328,29 @@ pub async fn create_project(
             .map_err(|_| "failed to lock process manager".to_string())?;
         let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
         manager
-            .spawn_command(&process_id, &parent_dir, cmd, &args_ref, &app_handle)
+            .spawn_command(
+                &process_id,
+                &parent_dir,
+                cmd,
+                &args_ref,
+                Arc::new(app_handle.clone()),
+            )
             .map_err(|e| e.to_string())?;
     }
 
-    {
-        let manager = process_manager()
-            .lock()
-            .map_err(|_| "failed to lock process manager".to_string())?;
-        let exit = manager
-            .wait_for_exit(&process_id)
-            .map_err(|e| e.to_string())?;
-        if exit != 0 {
-            return Err(format!("create project failed with exit code {exit}"));
-        }
+    let exit = wait_for_process(&process_id)?;
+    if exit != 0 {
+        return Err(format!("create project failed with exit code {exit}"));
     }
 
     let new_project_dir = parent_dir.join(&name);
     register_project(new_project_dir.to_string_lossy().to_string()).await
 }
 
-/// Generate a desktop app that wraps a website URL.
+/// Generate app(s) that wrap a website URL — one project holding a target for
+/// each requested framework.
 ///
-/// Unlike [`create_project`], this writes the Tauri project directly, so it
+/// Unlike [`create_project`], this writes the project files directly, so it
 /// needs no Node.js, package manager, or framework — only a website address
 /// and an app name. This is the engine behind Forge's "turn your website into
 /// an app" flow for non-technical users.
@@ -315,7 +362,14 @@ pub async fn create_web_app(
     width: Option<u32>,
     height: Option<u32>,
     identifier: Option<String>,
+    frameworks: Option<Vec<String>>,
 ) -> Result<ProjectMeta, String> {
+    let framework_ids = frameworks.unwrap_or_else(|| vec!["tauri".to_string()]);
+    let chosen: Vec<Framework> = framework_ids
+        .iter()
+        .map(|id| Framework::from_id(id).ok_or_else(|| format!("unknown framework: {id}")))
+        .collect::<Result<_, _>>()?;
+
     let opts = WebAppOptions {
         name,
         url,
@@ -324,11 +378,53 @@ pub async fn create_web_app(
         height,
     };
 
-    let project_dir =
-        web_app::scaffold_web_app(&PathBuf::from(parent_dir), &opts).map_err(|e| e.to_string())?;
+    let project_dir = frameworks::scaffold_project(&PathBuf::from(parent_dir), &opts, &chosen)
+        .map_err(|e| e.to_string())?;
     info!("create_web_app: generated {}", project_dir.display());
 
     register_project(project_dir.to_string_lossy().to_string()).await
+}
+
+/// Add another framework target to an existing project (e.g. a mobile app
+/// alongside the desktop one), reusing the project's recorded website.
+#[tauri::command]
+pub async fn add_target(
+    project_path: String,
+    framework: String,
+    url: Option<String>,
+) -> Result<ProjectMeta, String> {
+    let fw =
+        Framework::from_id(&framework).ok_or_else(|| format!("unknown framework: {framework}"))?;
+    let root = PathBuf::from(&project_path);
+
+    let status = detect_status_impl(&root).map_err(|e| e.to_string())?;
+    let source_url = url
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .or(status.source_url.clone())
+        .ok_or_else(|| {
+            "This project doesn't record which website it wraps — enter the website address."
+                .to_string()
+        })?;
+    let name = status.name.clone().unwrap_or_else(|| {
+        root.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("My App")
+            .to_string()
+    });
+
+    let opts = WebAppOptions {
+        name,
+        url: source_url,
+        identifier: status.identifier.clone(),
+        width: None,
+        height: None,
+    };
+
+    frameworks::add_target_to_project(&root, fw, &opts).map_err(|e| e.to_string())?;
+    info!("add_target: added {} to {}", fw.id(), project_path);
+
+    register_project(project_path).await
 }
 
 /// Suggest a friendly default folder (`~/Forge Apps`) for saving generated apps.
@@ -355,24 +451,17 @@ pub async fn init_tauri(
                 &project_dir,
                 "cargo",
                 &["tauri", "init"],
-                &app_handle,
+                Arc::new(app_handle.clone()),
             )
             .map_err(|e| e.to_string())?;
     }
 
-    {
-        let manager = process_manager()
-            .lock()
-            .map_err(|_| "failed to lock process manager".to_string())?;
-        let exit = manager
-            .wait_for_exit(&process_id)
-            .map_err(|e| e.to_string())?;
-        if exit != 0 {
-            return Err(format!("cargo tauri init failed with exit code {exit}"));
-        }
+    let exit = wait_for_process(&process_id)?;
+    if exit != 0 {
+        return Err(format!("cargo tauri init failed with exit code {exit}"));
     }
 
-    detect_tauri_status(project_path).await
+    detect_project_status(project_path).await
 }
 
 #[tauri::command]
@@ -523,9 +612,11 @@ pub async fn run_build_preset(
             .iter()
             .find(|p| p.id == step.project_id)
             .ok_or_else(|| format!("project not found for step: {}", step.project_id))?;
+        let step_fw = parse_framework(Some(step.framework.clone()))?;
 
         let result = run_build_internal(
             &project.path.to_string_lossy(),
+            step_fw,
             &step.targets,
             &app_handle,
             Some(step.project_id.clone()),
@@ -539,9 +630,11 @@ pub async fn run_build_preset(
                 .iter()
                 .find(|p| p.id == next.project_id)
                 .ok_or_else(|| format!("project not found for step: {}", next.project_id))?;
+            let next_fw = parse_framework(Some(next.framework.clone()))?;
 
             let result_next = run_build_internal(
                 &project_next.path.to_string_lossy(),
+                next_fw,
                 &next.targets,
                 &app_handle,
                 Some(next.project_id.clone()),
@@ -580,141 +673,108 @@ pub async fn get_deploy_status(workspace_id: String) -> Result<serde_json::Value
         .filter(|p| p.workspace_id.as_deref() == Some(workspace_id.as_str()))
         .collect();
 
-    let tauri_cli_installed = Command::new("cargo")
-        .args(["tauri", "--version"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
     let mut blockers: Vec<serde_json::Value> = Vec::new();
-    if !tauri_cli_installed {
-        blockers.push(json!({
-            "message": "cargo tauri CLI not installed",
-            "affected_project": null,
-            "severity": "high",
-            "fix_hint": "Install Tauri CLI via `cargo install tauri-cli`"
-        }));
-    }
-
-    let xcode_exists = Command::new("xcodebuild").arg("-version").output().is_ok();
-    let ndk_exists = Command::new("ndk-build").arg("--version").output().is_ok();
-
-    let platforms = vec!["macOS", "Linux", "Windows", "iOS", "Android"];
     let mut matrix = Vec::new();
     let mut checklist = Vec::new();
     let mut built_count = 0usize;
     let mut total_count = 0usize;
+    let mut frameworks_in_use: Vec<Framework> = Vec::new();
 
     for project in &projects {
         let project_path = PathBuf::from(&project.path);
-        let tauri_conf_exists = project_path
-            .join("src-tauri")
-            .join("tauri.conf.json")
-            .exists()
-            || project_path.join("tauri.conf.json").exists();
-
-        if !tauri_conf_exists {
-            blockers.push(json!({
-                "message": "tauri.conf.json missing",
-                "affected_project": project.name,
-                "severity": "high",
-                "fix_hint": "Open Config Editor and create/repair tauri.conf.json"
-            }));
-        }
-
-        let status_json = detect_status_impl(&project_path).map_err(|e| e.to_string())?;
-        let tauri_initialized = status_json.has_tauri_conf;
-        let config_issues = if tauri_conf_exists {
-            let cfg = config_manager::read_config(&project_path).map_err(|e| e.to_string())?;
-            config_manager::validate_config(&project_path, &cfg).map_err(|e| e.to_string())?
-        } else {
-            vec!["tauri.conf.json missing".to_string()]
-        };
-
+        let status = detect_status_impl(&project_path).map_err(|e| e.to_string())?;
         let (git_branch, git_dirty) =
             get_git_info_impl(&project_path).map_err(|e| e.to_string())?;
         let artifacts = collect_artifacts_internal(&project.path.to_string_lossy())?;
 
-        let mut platform_status = serde_json::Map::new();
-        for platform in &platforms {
-            let targeted = project
-                .platforms
-                .iter()
-                .any(|p| p.eq_ignore_ascii_case(platform))
-                || matches!(*platform, "macOS" | "Linux" | "Windows");
+        if status.targets.is_empty() {
+            blockers.push(json!({
+                "message": "No app targets found in this project",
+                "affected_project": project.name,
+                "severity": "high",
+                "fix_hint": "Open the project and add an app type, or repair its config"
+            }));
+        }
 
-            if !targeted {
-                platform_status.insert(platform.to_string(), json!("not_started"));
+        for target in &status.targets {
+            let Some(fw) = Framework::from_id(&target.framework) else {
                 continue;
+            };
+            if !frameworks_in_use.contains(&fw) {
+                frameworks_in_use.push(fw);
+            }
+            let adapter = frameworks::adapter(fw);
+            let framework_label = adapter.info().label;
+
+            let mut platform_status = serde_json::Map::new();
+            for platform in adapter.info().platforms {
+                total_count += 1;
+
+                let built = artifacts.iter().any(|a| {
+                    let fmt = a.get("format").and_then(|v| v.as_str()).unwrap_or("");
+                    let art_fw = a.get("framework").and_then(|v| v.as_str()).unwrap_or("");
+                    art_fw == target.framework
+                        && adapter.platform_for_artifact(fmt) == Some(*platform)
+                });
+
+                let s = if built {
+                    built_count += 1;
+                    "built"
+                } else if target.status == "ready" {
+                    "configured"
+                } else {
+                    "not_started"
+                };
+                platform_status.insert((*platform).to_string(), json!(s));
             }
 
-            total_count += 1;
-
-            let ext_match = artifacts.iter().any(|a| {
-                let fmt = a.get("format").and_then(|v| v.as_str()).unwrap_or("");
-                match *platform {
-                    "macOS" => fmt == "dmg" || fmt == "app",
-                    "Linux" => fmt == "AppImage" || fmt == "deb" || fmt == "rpm",
-                    "Windows" => fmt == "msi" || fmt == "exe" || fmt == "nsis",
-                    "iOS" => fmt == "ipa",
-                    "Android" => fmt == "apk" || fmt == "aab",
-                    _ => false,
-                }
-            });
-
-            let status = if ext_match {
-                built_count += 1;
-                "built"
-            } else if !tauri_initialized || !config_issues.is_empty() {
-                "not_started"
-            } else {
-                "configured"
-            };
-
-            platform_status.insert(platform.to_string(), json!(status));
-        }
-
-        checklist.push(json!({
-            "project": project.name,
-            "tauri_initialized": tauri_initialized,
-            "git_branch": git_branch,
-            "git_dirty": git_dirty,
-            "config_ok": config_issues.is_empty(),
-            "config_issues": config_issues,
-        }));
-
-        matrix.push(json!({
-            "project_id": project.id,
-            "project_name": project.name,
-            "statuses": platform_status,
-        }));
-
-        if project
-            .platforms
-            .iter()
-            .any(|p| p.eq_ignore_ascii_case("iOS"))
-            && !xcode_exists
-        {
-            blockers.push(json!({
-                "message": "Xcode not found",
-                "affected_project": project.name,
-                "severity": "high",
-                "fix_hint": "Install Xcode and command line tools"
+            checklist.push(json!({
+                "project": project.name,
+                "framework": target.framework,
+                "framework_label": framework_label,
+                "initialized": target.status != "error",
+                "git_branch": git_branch,
+                "git_dirty": git_dirty,
+                "config_ok": target.config_ok,
+                "config_issues": target.config_issues,
             }));
-        }
 
-        if project
-            .platforms
-            .iter()
-            .any(|p| p.eq_ignore_ascii_case("Android"))
-            && !ndk_exists
-        {
-            blockers.push(json!({
-                "message": "Android NDK not found",
-                "affected_project": project.name,
-                "severity": "high",
-                "fix_hint": "Install Android NDK and set ANDROID_NDK_HOME"
+            matrix.push(json!({
+                "project_id": project.id,
+                "project_name": project.name,
+                "framework": target.framework,
+                "framework_label": framework_label,
+                "statuses": platform_status,
             }));
+
+            if !target.config_ok {
+                blockers.push(json!({
+                    "message": format!("{framework_label}: configuration needs attention"),
+                    "affected_project": project.name,
+                    "severity": "medium",
+                    "fix_hint": "Open App settings to review and fix the reported issues"
+                }));
+            }
+        }
+    }
+
+    // Missing tools, only for the frameworks these projects actually use.
+    let mut reported_tools: Vec<&'static str> = Vec::new();
+    for fw in &frameworks_in_use {
+        for tool in frameworks::adapter(*fw).info().tools {
+            if !tool.applies_here() || reported_tools.contains(&tool.name) {
+                continue;
+            }
+            reported_tools.push(tool.name);
+            let (installed, _version) = tool.run_probe();
+            if !installed {
+                blockers.push(json!({
+                    "message": format!("{} not installed", tool.label),
+                    "affected_project": null,
+                    "severity": "high",
+                    "fix_hint": tool.install_hint,
+                }));
+            }
         }
     }
 
@@ -733,58 +793,50 @@ pub async fn get_deploy_status(workspace_id: String) -> Result<serde_json::Value
     }))
 }
 
+/// Check which tools are installed, grouped so the UI can say which app types
+/// need each one. Deduped across frameworks (Node.js is listed once even
+/// though several frameworks need it).
 #[tauri::command]
 pub async fn check_environment() -> Result<serde_json::Value, String> {
     // Re-run per check so tools installed after launch (e.g. rustup while
     // Forge is open) are picked up by the "Check again" button.
     crate::backend::env_path::ensure_cargo_bin_in_path();
 
-    fn check_command(cmd: &str, args: &[&str]) -> serde_json::Value {
-        match Command::new(cmd).args(args).output() {
-            Ok(out) if out.status.success() => {
-                let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                json!({"installed": true, "version": version})
+    let mut order: Vec<&'static str> = Vec::new();
+    let mut by_name: BTreeMap<&'static str, (ToolCheck, Vec<&'static str>)> = BTreeMap::new();
+
+    for adapter in frameworks::adapters() {
+        let info = adapter.info();
+        for tool in info.tools {
+            if !tool.applies_here() {
+                continue;
             }
-            _ => json!({"installed": false, "version": "not found"}),
+            if let Some((_, needed_by)) = by_name.get_mut(tool.name) {
+                if !needed_by.contains(&info.id) {
+                    needed_by.push(info.id);
+                }
+            } else {
+                order.push(tool.name);
+                by_name.insert(tool.name, (tool, vec![info.id]));
+            }
         }
     }
 
-    let rust = check_command("rustc", &["--version"]);
-    let cargo = check_command("cargo", &["--version"]);
-    let node = check_command("node", &["--version"]);
-    let tauri_cli = check_command("cargo", &["tauri", "--version"]);
-
-    let mut platform_deps = Vec::new();
-    if cfg!(target_os = "linux") {
-        // pkg-config probes the actual library Tauri links against and works
-        // across distros; the dpkg fallback keeps Debian/Ubuntu covered when
-        // pkg-config itself isn't installed.
-        let via_pkg_config = Command::new("pkg-config")
-            .args(["--exists", "webkit2gtk-4.1"])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        let via_dpkg = || {
-            Command::new("dpkg")
-                .args(["-l", "libwebkit2gtk-4.1-dev"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        };
-        let installed = via_pkg_config || via_dpkg();
-        platform_deps.push(json!({
-            "name": "webkit2gtk-4.1 development libraries",
-            "installed": installed
+    let mut tools = Vec::new();
+    for name in order {
+        let (tool, needed_by) = &by_name[name];
+        let (installed, version) = tool.run_probe();
+        tools.push(json!({
+            "name": tool.name,
+            "label": tool.label,
+            "installed": installed,
+            "version": version,
+            "install_hint": tool.install_hint,
+            "needed_by": needed_by,
         }));
     }
 
-    Ok(json!({
-        "rust": rust,
-        "cargo": cargo,
-        "node": node,
-        "tauri_cli": tauri_cli,
-        "platform_deps": platform_deps
-    }))
+    Ok(json!({ "tools": tools }))
 }
 
 #[tauri::command]
@@ -792,99 +844,167 @@ pub async fn collect_artifacts(project_path: String) -> Result<Vec<serde_json::V
     collect_artifacts_internal(&project_path)
 }
 
+/// Collect installer artifacts from every framework target in the project,
+/// tagging each with the framework that produced it. Only files whose
+/// extension is an installable output are listed.
 fn collect_artifacts_internal(project_path: &str) -> Result<Vec<serde_json::Value>, String> {
-    let bundle_dir = PathBuf::from(project_path)
-        .join("src-tauri")
-        .join("target")
-        .join("release")
-        .join("bundle");
+    let root = PathBuf::from(project_path);
+    let status = detect_status_impl(&root).map_err(|e| e.to_string())?;
 
     let mut artifacts = Vec::new();
-    if !bundle_dir.exists() {
-        return Ok(artifacts);
-    }
+    for target in &status.targets {
+        let Some(fw) = Framework::from_id(&target.framework) else {
+            continue;
+        };
+        let adapter = frameworks::adapter(fw);
+        let target_dir = frameworks::target_path(&root, &target.dir);
 
-    let mut stack = vec![bundle_dir];
-    while let Some(dir) = stack.pop() {
-        for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let path = entry.path();
-            let metadata = entry.metadata().map_err(|e| e.to_string())?;
-
-            if metadata.is_dir() {
-                stack.push(path);
+        for base in adapter.artifact_dirs(&target_dir) {
+            if !base.exists() {
                 continue;
             }
+            let mut stack = vec![base];
+            while let Some(dir) = stack.pop() {
+                for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+                    let entry = entry.map_err(|e| e.to_string())?;
+                    let path = entry.path();
+                    let metadata = entry.metadata().map_err(|e| e.to_string())?;
 
-            let created_at = metadata
-                .created()
-                .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or_default();
+                    if metadata.is_dir() {
+                        stack.push(path);
+                        continue;
+                    }
 
-            artifacts.push(json!({
-                "path": path.to_string_lossy().to_string(),
-                "size_bytes": metadata.len(),
-                "format": path.extension().and_then(|e| e.to_str()).unwrap_or(""),
-                "created_at": created_at,
-            }));
+                    let format = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if adapter.platform_for_artifact(&format).is_none() {
+                        continue;
+                    }
+
+                    let created_at = metadata
+                        .created()
+                        .ok()
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or_default();
+
+                    artifacts.push(json!({
+                        "path": path.to_string_lossy().to_string(),
+                        "size_bytes": metadata.len(),
+                        "format": format,
+                        "created_at": created_at,
+                        "framework": target.framework,
+                    }));
+                }
+            }
         }
     }
 
     Ok(artifacts)
 }
 
+/// Wait for a managed process without holding the process-manager lock, so
+/// Stop stays responsive while something runs.
+fn wait_for_process(process_id: &str) -> Result<i32, String> {
+    let handle = {
+        let manager = process_manager()
+            .lock()
+            .map_err(|_| "failed to lock process manager".to_string())?;
+        manager.wait_handle(process_id).map_err(|e| e.to_string())?
+    };
+    Ok(handle.wait())
+}
+
 fn run_build_internal(
     project_path: &str,
+    framework: Framework,
     targets: &[String],
     app_handle: &AppHandle,
     project_id: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let started = Instant::now();
     let started_at = chrono_like_now();
-    let project_dir = PathBuf::from(project_path);
+    let root = PathBuf::from(project_path);
+    let target_dir = frameworks::resolve_target_dir(&root, framework).map_err(|e| e.to_string())?;
+    let adapter = frameworks::adapter(framework);
     let mut status = "success".to_string();
 
     info!(
-        "run_build: building {project_path} for targets [{}]",
+        "run_build: building {project_path} ({}) for targets [{}]",
+        framework.id(),
         targets.join(", ")
     );
 
-    for target in targets {
-        let process_id = format!("build:{}:{}", project_path, target);
+    for bundle_kind in targets {
+        let process_id = format!("build:{}:{}:{}", project_path, framework.id(), bundle_kind);
+
+        // Some outputs (the PWA kit) are produced in-process with no external
+        // toolchain; emit matching terminal events so the activity view shows
+        // what happened.
+        match adapter.build_in_process(&target_dir, bundle_kind) {
+            Ok(true) => {
+                let _ = app_handle.emit(
+                    "process-output",
+                    ProcessOutputPayload {
+                        process_id: process_id.clone(),
+                        data: format!("Packaged {} ({bundle_kind})", adapter.info().label),
+                        is_stderr: false,
+                    },
+                );
+                let _ = app_handle.emit(
+                    "process-exit",
+                    ProcessExitPayload {
+                        id: process_id.clone(),
+                        code: 0,
+                    },
+                );
+                continue;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                warn!("run_build: in-process build failed: {e}");
+                let _ = app_handle.emit(
+                    "process-output",
+                    ProcessOutputPayload {
+                        process_id: process_id.clone(),
+                        data: e.to_string(),
+                        is_stderr: true,
+                    },
+                );
+                status = "failed".to_string();
+                break;
+            }
+        }
+
+        let steps = adapter
+            .build_steps(&target_dir, bundle_kind)
+            .map_err(|e| e.to_string())?;
+
         {
             let mut manager = process_manager()
                 .lock()
                 .map_err(|_| "failed to lock process manager".to_string())?;
             manager
-                .spawn_command(
-                    &process_id,
-                    &project_dir,
-                    "cargo",
-                    &["tauri", "build", "--bundles", target],
-                    app_handle,
-                )
+                .spawn_sequence(&process_id, steps, Arc::new(app_handle.clone()))
                 .map_err(|e| e.to_string())?;
         }
 
-        let exit_code = {
-            let manager = process_manager()
-                .lock()
-                .map_err(|_| "failed to lock process manager".to_string())?;
-            manager
-                .wait_for_exit(&process_id)
-                .map_err(|e| e.to_string())?
-        };
-
+        let exit_code = wait_for_process(&process_id)?;
         if exit_code != 0 {
-            warn!("run_build: target {target} exited with code {exit_code}");
+            warn!("run_build: target {bundle_kind} exited with code {exit_code}");
             status = "failed".to_string();
             break;
         }
     }
 
-    let artifacts_json = collect_artifacts_internal(project_path)?;
+    let all_artifacts = collect_artifacts_internal(project_path)?;
+    let artifacts_json: Vec<serde_json::Value> = all_artifacts
+        .into_iter()
+        .filter(|a| a.get("framework").and_then(|v| v.as_str()) == Some(framework.id()))
+        .collect();
     let duration_secs = started.elapsed().as_secs();
 
     let artifacts: Vec<Artifact> = artifacts_json
@@ -914,6 +1034,7 @@ fn run_build_internal(
     let record = BuildRecord {
         id: Uuid::new_v4().to_string(),
         project_id: project_id.unwrap_or_else(|| project_path.to_string()),
+        framework: framework.id().to_string(),
         targets: targets.to_vec(),
         status: status.clone(),
         started_at,
@@ -928,21 +1049,10 @@ fn run_build_internal(
 
     Ok(json!({
         "status": status,
+        "framework": framework.id(),
         "duration_secs": duration_secs,
         "artifacts": artifacts_json
     }))
-}
-
-fn detect_package_manager(project_dir: &Path) -> &'static str {
-    if project_dir.join("pnpm-lock.yaml").exists() {
-        "pnpm"
-    } else if project_dir.join("yarn.lock").exists() {
-        "yarn"
-    } else if project_dir.join("bun.lockb").exists() || project_dir.join("bun.lock").exists() {
-        "bun"
-    } else {
-        "npm"
-    }
 }
 
 fn chrono_like_now() -> String {

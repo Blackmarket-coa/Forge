@@ -6,6 +6,7 @@ use log::{debug, info};
 use crate::app_state::model::{ForgeState, STATE_SCHEMA_VERSION};
 use crate::backend::errors::ForgeError;
 use crate::backend::fs_util::write_atomic;
+use crate::backend::project_manager::TargetMeta;
 
 pub fn state_path() -> Result<PathBuf, ForgeError> {
     let home = std::env::var("HOME")
@@ -34,15 +35,34 @@ pub fn load_state() -> Result<ForgeState, ForgeError> {
     Ok(state)
 }
 
-/// Upgrade an older on-disk state to the current schema. Today only version 1
-/// exists; future versions add arms that mutate and bump `schema_version`.
-fn migrate(state: ForgeState) -> Result<ForgeState, ForgeError> {
+/// Upgrade an older on-disk state to the current schema, stepping one version
+/// at a time so callers always receive a fully up-to-date value.
+fn migrate(mut state: ForgeState) -> Result<ForgeState, ForgeError> {
     if state.schema_version > STATE_SCHEMA_VERSION {
         return Err(ForgeError::ConfigInvalid(format!(
             "state schema version {} is newer than supported version {}; please upgrade Forge",
             state.schema_version, STATE_SCHEMA_VERSION
         )));
     }
+
+    // v1 → v2: every project predates multi-framework support, so each one is
+    // a single Tauri target at the project root. (Targets are re-detected
+    // from disk on registration and refresh; this keeps the state coherent
+    // even for projects whose folders are currently unavailable.)
+    if state.schema_version < 2 {
+        for project in &mut state.projects {
+            if project.targets.is_empty() && project.tauri_version.is_some() {
+                project.targets.push(TargetMeta {
+                    framework: "tauri".to_string(),
+                    dir: ".".to_string(),
+                    version: project.tauri_version.clone(),
+                    status: project.status.clone(),
+                });
+            }
+        }
+        state.schema_version = 2;
+    }
+
     Ok(state)
 }
 
@@ -109,6 +129,52 @@ mod tests {
 
             assert_eq!(loaded.tier, "pro");
             assert_eq!(loaded.schema_version, STATE_SCHEMA_VERSION);
+        });
+    }
+
+    #[test]
+    fn migrate_v1_projects_gain_a_tauri_target() {
+        let dir = tempfile::tempdir().unwrap();
+        with_home(dir.path(), || {
+            let v1 = r#"{
+                "schema_version": 1,
+                "projects": [{
+                    "id": "p1",
+                    "name": "Legacy",
+                    "path": "/tmp/legacy",
+                    "workspace_id": null,
+                    "tauri_version": "2.1.0",
+                    "identifier": "com.example.legacy",
+                    "frontend_framework": "vanilla",
+                    "platforms": ["desktop"],
+                    "git_branch": null,
+                    "git_dirty": false,
+                    "status": "ready",
+                    "tags": [],
+                    "role": null
+                }],
+                "workspaces": [],
+                "build_presets": [],
+                "build_history": [],
+                "preferences": {
+                    "theme": "system",
+                    "terminal_font_size": 13,
+                    "default_package_manager": "npm",
+                    "auto_check_updates": true
+                },
+                "tier": "free"
+            }"#;
+            let path = state_path().unwrap();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, v1).unwrap();
+
+            let state = load_state().unwrap();
+            assert_eq!(state.schema_version, STATE_SCHEMA_VERSION);
+            assert_eq!(state.projects.len(), 1);
+            let targets = &state.projects[0].targets;
+            assert_eq!(targets.len(), 1);
+            assert_eq!(targets[0].framework, "tauri");
+            assert_eq!(targets[0].version.as_deref(), Some("2.1.0"));
         });
     }
 

@@ -2,6 +2,7 @@ pub mod config;
 pub mod config_manager;
 pub mod env_path;
 pub mod errors;
+pub mod frameworks;
 pub mod fs_util;
 pub mod ipc;
 pub mod license;
