@@ -1,16 +1,19 @@
-//! Generate a minimal, build-ready Tauri project that wraps a website URL.
+//! Tauri target templates plus the shared helpers every framework scaffold
+//! uses (URL normalization, name slugs, identifiers, HTML escaping, icons).
 //!
-//! This powers Forge's "turn your website into an app" flow. Unlike the
-//! `create-tauri-app` scaffolder used by [`crate::backend::ipc::create_project`],
-//! it writes the project files directly, so a non-technical user needs **no
-//! Node.js, package manager, or frontend framework** — only the Tauri build
-//! toolchain (Rust + the Tauri CLI), which Forge already detects, is required
-//! to turn the generated project into an installer.
+//! This powers Forge's "turn your website into an app" flow. Project files are
+//! written directly from inline templates, so a non-technical user needs **no
+//! Node.js, package manager, or frontend framework** at generation time — each
+//! framework's build toolchain (which Forge detects and explains) is only
+//! needed to turn a generated target into an installer.
 //!
-//! The generated app is a single window whose `url` points straight at the
-//! user's website, so it loads the live site in both `tauri dev` and a bundled
-//! release. The bundled icons are reused from Forge's own icon set so the
-//! project builds out of the box; users can replace them later.
+//! The generated Tauri app is a single window whose `url` points straight at
+//! the user's website, so it loads the live site in both `tauri dev` and a
+//! bundled release. The bundled icons are reused from Forge's own icon set so
+//! the project builds out of the box; users can replace them later.
+//!
+//! Multi-target orchestration (several frameworks wrapping one website) lives
+//! in [`crate::backend::frameworks`].
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,18 +25,18 @@ use crate::backend::errors::ForgeError;
 use crate::backend::fs_util::write_atomic;
 
 /// Default desktop window size for a generated app.
-const DEFAULT_WIDTH: u32 = 1200;
-const DEFAULT_HEIGHT: u32 = 800;
+pub(crate) const DEFAULT_WIDTH: u32 = 1200;
+pub(crate) const DEFAULT_HEIGHT: u32 = 800;
 
 /// Bundled default icons, reused from Forge's own icon set so generated apps
 /// build without the user having to supply their own. Paths are relative to
 /// this source file (`src-tauri/src/backend/`).
-const ICON_PNG: &[u8] = include_bytes!("../../icons/icon.png");
-const ICON_32: &[u8] = include_bytes!("../../icons/32x32.png");
-const ICON_128: &[u8] = include_bytes!("../../icons/128x128.png");
-const ICON_128_2X: &[u8] = include_bytes!("../../icons/128x128@2x.png");
-const ICON_ICNS: &[u8] = include_bytes!("../../icons/icon.icns");
-const ICON_ICO: &[u8] = include_bytes!("../../icons/icon.ico");
+pub(crate) const ICON_PNG: &[u8] = include_bytes!("../../icons/icon.png");
+pub(crate) const ICON_32: &[u8] = include_bytes!("../../icons/32x32.png");
+pub(crate) const ICON_128: &[u8] = include_bytes!("../../icons/128x128.png");
+pub(crate) const ICON_128_2X: &[u8] = include_bytes!("../../icons/128x128@2x.png");
+pub(crate) const ICON_ICNS: &[u8] = include_bytes!("../../icons/icon.icns");
+pub(crate) const ICON_ICO: &[u8] = include_bytes!("../../icons/icon.ico");
 
 /// Options for generating a website-wrapper app.
 #[derive(Debug, Clone, Default)]
@@ -48,6 +51,19 @@ pub struct WebAppOptions {
     /// Optional initial window width / height.
     pub width: Option<u32>,
     pub height: Option<u32>,
+}
+
+impl WebAppOptions {
+    /// The effective bundle identifier: the explicit one, else derived from
+    /// the app name.
+    pub fn effective_identifier(&self) -> String {
+        self.identifier
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| derive_identifier(&self.name))
+    }
 }
 
 /// Normalize a user-entered website address into a valid `http(s)` URL string.
@@ -142,18 +158,43 @@ pub fn derive_identifier(name: &str) -> String {
 }
 
 /// Escape a string for safe inclusion in HTML text/attribute content.
-fn html_escape(s: &str) -> String {
+pub(crate) fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
 
-/// Generate a complete Tauri project under `parent_dir` that opens `opts.url`.
+/// Refuse to scaffold into `dir` when it already exists with content, with a
+/// plain-language error naming the folder.
+pub(crate) fn refuse_non_empty(dir: &Path) -> Result<(), ForgeError> {
+    if dir.exists()
+        && fs::read_dir(dir)
+            .map(|mut it| it.next().is_some())
+            .unwrap_or(false)
+    {
+        let name = dir
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| dir.display().to_string());
+        return Err(ForgeError::ConfigInvalid(format!(
+            "A folder named \"{name}\" already exists here. \
+             Pick a different app name or save location."
+        )));
+    }
+    Ok(())
+}
+
+/// Write a complete Tauri target into `project_dir` (its historical layout:
+/// `src-tauri/` plus a placeholder `dist/` in the project root).
 ///
-/// Returns the path to the new project directory. Fails with a friendly error
-/// if the inputs are invalid or a non-empty folder of the same name already
-/// exists at the destination.
-pub fn scaffold_web_app(parent_dir: &Path, opts: &WebAppOptions) -> Result<PathBuf, ForgeError> {
+/// Validates the inputs itself so it is safe to call directly; refuses to
+/// clobber an existing non-empty `src-tauri/` folder. The project-level
+/// README and `.gitignore` are written by the orchestrator in
+/// [`crate::backend::frameworks::scaffold_project`].
+pub fn scaffold_tauri_target(
+    project_dir: &Path,
+    opts: &WebAppOptions,
+) -> Result<PathBuf, ForgeError> {
     let normalized_url = normalize_url(&opts.url)?;
 
     let name = opts.name.trim();
@@ -163,33 +204,12 @@ pub fn scaffold_web_app(parent_dir: &Path, opts: &WebAppOptions) -> Result<PathB
         ));
     }
 
-    let dir_slug = slug(name);
-    let project_dir = parent_dir.join(&dir_slug);
+    let src_tauri = project_dir.join("src-tauri");
+    refuse_non_empty(&src_tauri)?;
 
-    // Refuse to clobber an existing non-empty directory.
-    if project_dir.exists()
-        && fs::read_dir(&project_dir)
-            .map(|mut it| it.next().is_some())
-            .unwrap_or(false)
-    {
-        return Err(ForgeError::ConfigInvalid(format!(
-            "A folder named \"{dir_slug}\" already exists here. \
-             Pick a different app name or save location."
-        )));
-    }
-
-    let identifier = opts
-        .identifier
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| derive_identifier(name));
-
+    let identifier = opts.effective_identifier();
     let width = opts.width.unwrap_or(DEFAULT_WIDTH);
     let height = opts.height.unwrap_or(DEFAULT_HEIGHT);
-
-    let src_tauri = project_dir.join("src-tauri");
     let icons_dir = src_tauri.join("icons");
 
     // tauri.conf.json — the single window points directly at the remote site.
@@ -279,27 +299,6 @@ pub fn scaffold_web_app(parent_dir: &Path, opts: &WebAppOptions) -> Result<PathB
          </html>\n"
     );
 
-    let gitignore = "# Build output\n/src-tauri/target\n";
-
-    let readme = format!(
-        "# {name}\n\n\
-         A desktop app for **{url}**, created with Forge. When you open it, your \
-         website loads in its own app window.\n\n\
-         ## Turn this into an installable app\n\n\
-         You need the free Tauri build tools on your computer. Forge can check \
-         this for you under **Settings → Tools on your computer**, or install them \
-         manually:\n\n\
-         1. Install Rust: <https://www.rust-lang.org/tools/install>\n\
-         2. Install the Tauri CLI: `cargo install tauri-cli --version \"^2\"`\n\n\
-         Then build the installer from this folder:\n\n\
-         ```\ncargo tauri build\n```\n\n\
-         Your finished installer appears in `src-tauri/target/release/bundle/`.\n\n\
-         ## Change the app icon\n\n\
-         Replace the images in `src-tauri/icons/` with your own, then build again.\n",
-        name = name,
-        url = normalized_url,
-    );
-
     // Write project files. `write_atomic` creates parent directories as needed.
     write_atomic(&src_tauri.join("tauri.conf.json"), conf_str.as_bytes())?;
     write_atomic(&src_tauri.join("Cargo.toml"), cargo_toml.as_bytes())?;
@@ -313,8 +312,6 @@ pub fn scaffold_web_app(parent_dir: &Path, opts: &WebAppOptions) -> Result<PathB
         &project_dir.join("dist").join("index.html"),
         index_html.as_bytes(),
     )?;
-    write_atomic(&project_dir.join(".gitignore"), gitignore.as_bytes())?;
-    write_atomic(&project_dir.join("README.md"), readme.as_bytes())?;
 
     // Default icons.
     write_atomic(&icons_dir.join("icon.png"), ICON_PNG)?;
@@ -324,7 +321,7 @@ pub fn scaffold_web_app(parent_dir: &Path, opts: &WebAppOptions) -> Result<PathB
     write_atomic(&icons_dir.join("icon.icns"), ICON_ICNS)?;
     write_atomic(&icons_dir.join("icon.ico"), ICON_ICO)?;
 
-    Ok(project_dir)
+    Ok(project_dir.to_path_buf())
 }
 
 /// A friendly default location for generated apps: `~/Forge Apps`.
@@ -383,7 +380,7 @@ mod tests {
     }
 
     #[test]
-    fn scaffold_writes_a_buildable_project() {
+    fn scaffold_writes_a_buildable_tauri_target() {
         let dir = tempfile::tempdir().unwrap();
         let opts = WebAppOptions {
             name: "My Store".to_string(),
@@ -391,8 +388,8 @@ mod tests {
             ..Default::default()
         };
 
-        let project = scaffold_web_app(dir.path(), &opts).unwrap();
-        assert_eq!(project, dir.path().join("my-store"));
+        let project = dir.path().join("my-store");
+        scaffold_tauri_target(&project, &opts).unwrap();
 
         let conf_path = project.join("src-tauri").join("tauri.conf.json");
         let conf: serde_json::Value =
@@ -409,8 +406,6 @@ mod tests {
             "src-tauri/src/main.rs",
             "src-tauri/capabilities/default.json",
             "dist/index.html",
-            "README.md",
-            ".gitignore",
         ] {
             assert!(project.join(rel).exists(), "missing {rel}");
         }
@@ -424,9 +419,10 @@ mod tests {
     }
 
     #[test]
-    fn scaffold_refuses_non_empty_directory() {
+    fn scaffold_refuses_non_empty_src_tauri() {
         let dir = tempfile::tempdir().unwrap();
-        let existing = dir.path().join("my-store");
+        let project = dir.path().join("my-store");
+        let existing = project.join("src-tauri");
         fs::create_dir_all(&existing).unwrap();
         fs::write(existing.join("keep.txt"), b"hi").unwrap();
 
@@ -435,7 +431,7 @@ mod tests {
             url: "mystore.com".to_string(),
             ..Default::default()
         };
-        assert!(scaffold_web_app(dir.path(), &opts).is_err());
+        assert!(scaffold_tauri_target(&project, &opts).is_err());
     }
 
     #[test]
@@ -448,6 +444,6 @@ mod tests {
         };
         // "not a url" has a space; without a scheme it becomes
         // "https://not a url" which fails to parse.
-        assert!(scaffold_web_app(dir.path(), &opts).is_err());
+        assert!(scaffold_tauri_target(&dir.path().join("broken"), &opts).is_err());
     }
 }

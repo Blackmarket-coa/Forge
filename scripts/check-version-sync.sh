@@ -1,7 +1,9 @@
 #!/bin/sh
-# Verify that the app version is identical in src-tauri/Cargo.toml and
-# src-tauri/tauri.conf.json. These two files must stay in sync — a mismatch
-# ships a release whose installer/updater metadata disagrees with the binary.
+# Verify that the app version is identical in src-tauri/Cargo.toml,
+# src-tauri/tauri.conf.json, and web/.env (REACT_APP_VERSION — the Settings
+# "Current version" badge). These files must stay in sync — a mismatch ships a
+# release whose installer/updater metadata disagrees with the binary or lies
+# in the UI.
 #
 # Exits non-zero with a clear message when the versions diverge so CI can block
 # the drift before it reaches a tagged release.
@@ -28,11 +30,19 @@ if [ -z "$tauri_version" ]; then
   exit 2
 fi
 
-if [ "$cargo_version" != "$tauri_version" ]; then
+web_env="$repo_root/web/.env"
+web_version=$(grep -m1 '^REACT_APP_VERSION=' "$web_env" | sed -E 's/^REACT_APP_VERSION=//')
+if [ -z "$web_version" ]; then
+  echo "check-version-sync: could not read REACT_APP_VERSION from $web_env" >&2
+  exit 2
+fi
+
+if [ "$cargo_version" != "$tauri_version" ] || [ "$cargo_version" != "$web_version" ]; then
   echo "check-version-sync: version mismatch" >&2
   echo "  src-tauri/Cargo.toml      = $cargo_version" >&2
   echo "  src-tauri/tauri.conf.json = $tauri_version" >&2
-  echo "Update both files to the same version before releasing." >&2
+  echo "  web/.env                  = $web_version" >&2
+  echo "Update all three files to the same version before releasing." >&2
   exit 1
 fi
 

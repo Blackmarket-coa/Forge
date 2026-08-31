@@ -1,13 +1,23 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useSnackbar } from "notistack"
 import {
+  addTarget,
   collectArtifacts,
+  Framework,
+  FrameworkInfo,
   getBuildHistory,
+  getFrameworks,
   killProcess,
+  openExternal,
   ProjectMeta,
   runBuild,
   runDev,
 } from "../api/api"
+import {
+  FALLBACK_FRAMEWORKS,
+  frameworkBadge,
+  projectTargets,
+} from "../lib/frameworks"
 import Terminal from "./Terminal"
 import LicenseGate from "./LicenseGate"
 import { Badge } from "./ui/badge"
@@ -16,24 +26,15 @@ import { Card } from "./ui/card"
 import { Checkbox } from "./ui/checkbox"
 import { EmptyState } from "./ui/empty-state"
 import { PageHeader } from "./ui/page-header"
+import { Select } from "./ui/select"
 import { Tabs } from "./ui/tabs"
 import styles from "./ProjectView.module.scss"
 
 interface ProjectViewProps {
   project: ProjectMeta
   onBack: () => void
-  onOpenConfig: () => void
+  onOpenConfig: (framework: Framework) => void
 }
-
-// `value` is the Tauri bundle identifier passed to the build; `label` is the
-// plain-language name shown to the user.
-const BUILD_TARGETS: Array<{ value: string; label: string }> = [
-  { value: "dmg", label: "macOS app (.dmg)" },
-  { value: "appimage", label: "Linux app (AppImage)" },
-  { value: "deb", label: "Linux app (.deb)" },
-  { value: "msi", label: "Windows app (.msi)" },
-  { value: "nsis", label: "Windows installer (.exe)" },
-]
 
 export default function ProjectView({
   project,
@@ -41,39 +42,105 @@ export default function ProjectView({
   onOpenConfig,
 }: ProjectViewProps) {
   const { enqueueSnackbar } = useSnackbar()
+  const [proj, setProj] = useState<ProjectMeta>(project)
+  const [frameworkInfos, setFrameworkInfos] =
+    useState<FrameworkInfo[]>(FALLBACK_FRAMEWORKS)
   const [tab, setTab] = useState("output")
   const [isRunning, setIsRunning] = useState(false)
   const [building, setBuilding] = useState(false)
+  const [addingTarget, setAddingTarget] = useState(false)
   const [processId, setProcessId] = useState("")
   const [targets, setTargets] = useState<string[]>([])
+  const [addChoice, setAddChoice] = useState<Framework | "">("")
   const [buildResult, setBuildResult] = useState<any>(null)
   const [artifacts, setArtifacts] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
 
+  const appTypes = useMemo(() => projectTargets(proj), [proj])
+  const [activeFramework, setActiveFramework] = useState<Framework>(
+    appTypes[0] || "tauri"
+  )
+
+  useEffect(() => {
+    setProj(project)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id])
+
+  useEffect(() => {
+    if (appTypes.length > 0 && !appTypes.includes(activeFramework)) {
+      setActiveFramework(appTypes[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appTypes])
+
+  useEffect(() => {
+    void getFrameworks()
+      .then((list) => {
+        if (list.length > 0) setFrameworkInfos(list)
+      })
+      .catch(() => {
+        /* fall back to the static list */
+      })
+  }, [])
+
+  const activeInfo = useMemo(
+    () =>
+      frameworkInfos.find((f) => f.id === activeFramework) ||
+      FALLBACK_FRAMEWORKS[0],
+    [frameworkInfos, activeFramework]
+  )
+
   const refreshHistory = async () => {
     try {
-      setHistory(await getBuildHistory(project.id, 10))
+      setHistory(await getBuildHistory(proj.id, 10))
     } catch {
       /* history is best-effort */
     }
   }
 
+  const refreshArtifacts = async () => {
+    try {
+      setArtifacts(await collectArtifacts(proj.path))
+    } catch {
+      /* artifacts are best-effort */
+    }
+  }
+
   useEffect(() => {
     void refreshHistory()
+    void refreshArtifacts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id])
+  }, [proj.id])
 
-  // Process ids are like `dev:{path}` and `build:{path}:{target}`, so matching
-  // on the project path shows both dev and build output for this project.
-  const processIdPrefix = project.path
+  // Reset the bundle-kind selection when switching app type.
+  useEffect(() => {
+    setTargets([])
+    setBuildResult(null)
+  }, [activeFramework])
+
+  // Process ids look like `dev:{path}:{framework}` and
+  // `build:{path}:{framework}:{kind}`, so matching on the project path shows
+  // all activity for this project.
+  const processIdPrefix = proj.path
 
   const handleDev = async () => {
+    if (!activeInfo.dev_available) {
+      const site = proj.source_url
+      if (site) {
+        await openExternal(site)
+      } else {
+        enqueueSnackbar("This app type has no live preview.", {
+          variant: "info",
+        })
+      }
+      return
+    }
     try {
-      const pid = await runDev(project.path)
-      setProcessId(`dev:${project.path}`)
+      const id = await runDev(proj.path, activeFramework)
+      setProcessId(id)
       setTab("output")
       setIsRunning(true)
-      enqueueSnackbar(`Preview started (pid ${pid})`, { variant: "success" })
+      enqueueSnackbar("Preview started", { variant: "success" })
     } catch (e: any) {
       enqueueSnackbar(`Couldn't start preview: ${e?.message || e}`, {
         variant: "error",
@@ -85,11 +152,14 @@ export default function ProjectView({
     setBuilding(true)
     setTab("output")
     try {
-      const result = await runBuild(project.path, targets)
+      const result = await runBuild(proj.path, targets, activeFramework)
       setBuildResult(result)
-      setArtifacts(result?.artifacts || (await collectArtifacts(project.path)))
+      await refreshArtifacts()
       await refreshHistory()
-      enqueueSnackbar("Build finished", { variant: "success" })
+      enqueueSnackbar(
+        result?.status === "success" ? "Build finished" : "Build failed",
+        { variant: result?.status === "success" ? "success" : "error" }
+      )
     } catch (e: any) {
       enqueueSnackbar(`Build failed: ${e?.message || e}`, { variant: "error" })
     } finally {
@@ -110,6 +180,27 @@ export default function ProjectView({
     }
   }
 
+  const handleAddTarget = async () => {
+    if (!addChoice) return
+    setAddingTarget(true)
+    try {
+      const updated = await addTarget(proj.path, addChoice)
+      setProj(updated)
+      setActiveFramework(addChoice)
+      setAddChoice("")
+      enqueueSnackbar(
+        `Added ${frameworkBadge(addChoice).short} to this project`,
+        { variant: "success" }
+      )
+    } catch (e: any) {
+      enqueueSnackbar(`Could not add app type: ${e?.message || e}`, {
+        variant: "error",
+      })
+    } finally {
+      setAddingTarget(false)
+    }
+  }
+
   const toggleTarget = (target: string, checked: boolean) => {
     setTargets((prev) =>
       checked
@@ -120,11 +211,13 @@ export default function ProjectView({
     )
   }
 
+  const availableToAdd = frameworkInfos.filter((f) => !appTypes.includes(f.id))
+
   const meta: Array<[string, React.ReactNode]> = [
-    ["Folder", project.path],
-    ["App ID", project.identifier || "unknown"],
-    ["Built with", project.frontend_framework || "website"],
-    ["Role", project.role || "—"],
+    ["Folder", proj.path],
+    ["Website", proj.source_url || "—"],
+    ["App ID", proj.identifier || "unknown"],
+    ["Built with", proj.frontend_framework || "website"],
   ]
 
   return (
@@ -134,21 +227,30 @@ export default function ProjectView({
       </Button>
 
       <PageHeader
-        title={project.name}
+        title={proj.name}
         meta={
           <>
-            {project.tauri_version && (
-              <Badge tone="info">Tauri {project.tauri_version}</Badge>
-            )}
-            {project.git_branch && (
+            {appTypes.map((fw) => {
+              const badge = frameworkBadge(fw)
+              const version = proj.targets?.find(
+                (t) => t.framework === fw
+              )?.version
+              return (
+                <Badge key={fw} tone="info">
+                  {badge.emoji} {badge.short}
+                  {version ? ` ${version}` : ""}
+                </Badge>
+              )
+            })}
+            {proj.git_branch && (
               <Badge tone="neutral" dot>
-                {project.git_branch}
+                {proj.git_branch}
               </Badge>
             )}
-            <Badge tone={project.git_dirty ? "warning" : "success"} dot>
-              {project.git_dirty ? "uncommitted changes" : "clean"}
+            <Badge tone={proj.git_dirty ? "warning" : "success"} dot>
+              {proj.git_dirty ? "uncommitted changes" : "clean"}
             </Badge>
-            {project.status && <Badge tone="neutral">{project.status}</Badge>}
+            {proj.status && <Badge tone="neutral">{proj.status}</Badge>}
           </>
         }
         actions={
@@ -159,15 +261,33 @@ export default function ProjectView({
               </Button>
             ) : (
               <Button variant="primary" onClick={handleDev}>
-                Preview app
+                {activeInfo.dev_available
+                  ? activeInfo.dev_label
+                  : "Open site in browser"}
               </Button>
             )}
-            <Button variant="secondary" onClick={onOpenConfig}>
+            <Button
+              variant="secondary"
+              onClick={() => onOpenConfig(activeFramework)}
+            >
               App settings
             </Button>
           </>
         }
       />
+
+      {appTypes.length > 1 && (
+        <div className={styles.targetTabs}>
+          <Tabs
+            value={activeFramework}
+            onValueChange={(v) => setActiveFramework(v as Framework)}
+            tabs={appTypes.map((fw) => ({
+              value: fw,
+              label: `${frameworkBadge(fw).emoji} ${frameworkBadge(fw).short}`,
+            }))}
+          />
+        </div>
+      )}
 
       <div className={styles.columns}>
         <div className={styles.main}>
@@ -202,6 +322,9 @@ export default function ProjectView({
                   <ul className={styles.artifacts}>
                     {artifacts.map((artifact, idx) => (
                       <li key={idx} className={styles.artifactRow}>
+                        <Badge tone="neutral">
+                          {frameworkBadge(artifact.framework || "tauri").short}
+                        </Badge>
                         <span className={styles.artifactPath}>
                           {artifact.path}
                         </span>
@@ -229,6 +352,7 @@ export default function ProjectView({
                       <thead>
                         <tr>
                           <th>Date</th>
+                          <th>App type</th>
                           <th>Targets</th>
                           <th>Status</th>
                           <th>Duration</th>
@@ -240,6 +364,9 @@ export default function ProjectView({
                         {history.map((row) => (
                           <tr key={row.id}>
                             <td>{row.started_at}</td>
+                            <td>
+                              {frameworkBadge(row.framework || "tauri").short}
+                            </td>
                             <td>{(row.targets || []).join(", ")}</td>
                             <td>
                               <Badge
@@ -259,7 +386,14 @@ export default function ProjectView({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => setTargets(row.targets || [])}
+                                onClick={() => {
+                                  const fw = (row.framework ||
+                                    "tauri") as Framework
+                                  if (appTypes.includes(fw)) {
+                                    setActiveFramework(fw)
+                                  }
+                                  setTargets(row.targets || [])
+                                }}
                               >
                                 Re-run
                               </Button>
@@ -277,18 +411,28 @@ export default function ProjectView({
 
         <div className={styles.side}>
           <Card
-            title="Build an installer"
-            subtitle="Pick which kinds of installer to create, then build."
+            title={`Build: ${activeInfo.label}`}
+            subtitle="Pick which kinds of output to create, then build."
           >
             <div className={styles.targets}>
-              {BUILD_TARGETS.map((target) => (
-                <Checkbox
-                  key={target.value}
-                  label={target.label}
-                  checked={targets.includes(target.value)}
-                  onChange={(e) => toggleTarget(target.value, e.target.checked)}
-                />
-              ))}
+              {activeInfo.bundle_kinds.length === 0 ? (
+                <span className={styles.muted}>
+                  No build options available for this app type.
+                </span>
+              ) : (
+                activeInfo.bundle_kinds.map((kind) => (
+                  <div key={kind.id} className={styles.targetRow}>
+                    <Checkbox
+                      label={kind.label}
+                      checked={targets.includes(kind.id)}
+                      onChange={(e) => toggleTarget(kind.id, e.target.checked)}
+                    />
+                    {kind.note && (
+                      <span className={styles.targetNote}>{kind.note}</span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
             <Button
               variant="primary"
@@ -323,16 +467,45 @@ export default function ProjectView({
               ))}
             </dl>
             <div className={styles.platforms}>
-              {(project.platforms || []).map((platform) => (
+              {(proj.platforms || []).map((platform) => (
                 <Badge key={platform} tone="neutral">
                   {platform}
                 </Badge>
               ))}
-              {(project.platforms || []).length === 0 && (
+              {(proj.platforms || []).length === 0 && (
                 <span className={styles.muted}>No platforms detected</span>
               )}
             </div>
           </Card>
+
+          {availableToAdd.length > 0 && (
+            <Card
+              title="Add another app type"
+              subtitle="Give this website more ways to run — same address, new app."
+            >
+              <div className={styles.addTargetRow}>
+                <Select
+                  value={addChoice}
+                  onChange={(e) => setAddChoice(e.target.value as Framework)}
+                >
+                  <option value="">Choose an app type…</option>
+                  {availableToAdd.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  variant="secondary"
+                  disabled={!addChoice}
+                  loading={addingTarget}
+                  onClick={handleAddTarget}
+                >
+                  Add
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>

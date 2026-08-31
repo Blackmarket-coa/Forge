@@ -1,39 +1,97 @@
 # Forge
 
-Forge turns websites into desktop apps — and helps you build and share them —
-without writing any code.
+Forge turns websites into desktop, mobile, and web apps — and helps you build
+and share them — without writing any code.
 
-If you have a website, Forge's **"Turn your website into an app"** flow asks for
-just two things: your web address and an app name. It then generates a complete,
-build-ready [Tauri](https://tauri.app) project that opens your site in its own
-desktop window. No Node.js, package manager, or framework knowledge required;
-the only thing you need to produce a shareable installer is the free Tauri build
-toolchain, which Forge checks for and explains in plain language.
+If you have a website, Forge's **"Turn your website into an app"** flow asks
+for your web address, an app name, and where the app should run. It then
+generates a complete, build-ready project for every kind of app you picked —
+all wrapping the same website, so updating your site updates every app. No
+Node.js, package manager, or framework knowledge is required at generation
+time; each app type's free build tools are only needed to produce installers,
+and Forge checks for them and explains anything missing in plain language.
 
-Forge is also a full visual project manager for Tauri applications: discover
-projects, group them, run builds, inspect installers, and track what's left
-before publishing — all from one interface.
+### Supported app types
+
+| App type | Framework | Runs on | Build tools needed |
+|---|---|---|---|
+| Desktop app (small & fast) | [Tauri](https://tauri.app) | Windows, macOS, Linux | Rust + Tauri CLI |
+| Desktop app (classic web stack) | [Electron](https://www.electronjs.org) | Windows, macOS, Linux | Node.js |
+| iPhone & Android app | [Capacitor](https://capacitorjs.com) | iOS, Android | Node.js + Android SDK / Xcode |
+| Mobile app (Expo preview) | [React Native](https://reactnative.dev) + [Expo](https://expo.dev) | iOS, Android | Node.js (+ Android SDK / Xcode / EAS for store builds) |
+| Install from the browser | PWA | Any modern browser | none — upload a kit to your site |
+
+One project can hold several app types (a *multi-target* project): start with a
+desktop app and add a mobile one later with **Add another app type**. Forge is
+also a full visual project manager for these projects: discover them on disk,
+group them, run previews and builds with live logs, inspect installers, edit
+each app's settings safely, and track what's left before publishing — all from
+one interface.
 
 ## Turn a website into an app
 
 1. Open Forge and click **Turn a website into an app**.
 2. Enter your website address (e.g. `yoursite.com`) and a name for your app.
-3. Click **Create my app**. Forge writes the project and registers it.
-4. Open the app and **Build installer** to produce something you can share.
+3. Pick where your app should run — desktop, mobile, and/or the browser.
+4. Click **Create my app**. Forge writes the project and registers it.
+5. Open the app and **Build installer** to produce something you can share
+   (each app type lists its own installer formats and required tools).
 
-Under the hood this generates a minimal Tauri project whose main window points
-directly at your URL (see `src-tauri/src/backend/web_app.rs`). Default app icons
-are included so the project builds out of the box; you can replace them later.
+Under the hood this generates one project folder with a target per framework
+(`src-tauri/`, `capacitor/`, `electron/`, `pwa/`, `react-native/`), described
+by a `forge.project.json` manifest. Each target wraps your URL directly — see
+`src-tauri/src/backend/frameworks/` for the generators. Default app icons are
+included so projects build out of the box; you can replace them later.
+
+## Extensions for the BMC ecosystem
+
+Forge is also the **authoring tool for BMC ecosystem extensions** — the
+modules users create and sell on the FreeBlackMarket marketplace and install
+into the Blackout host. The pipeline (the shared contract is
+`docs/contracts/extension-manifest.md` in `Blackmarket-coa/free-black-market`):
+
+1. **Create** in Forge's Extensions view from a template: Featured Vendor
+   Widget or a pinned-nav panel (pure manifest — nothing to host), or an
+   asset-carrying kind — theme, automation recipe, coalition kit, vault item,
+   privacy tool.
+2. **Validate & package**: Forge mirrors the shared manifest schema in Rust,
+   checks it locally, and computes deterministic digests. Asset-carrying kinds
+   get a reproducible `dist/<name>-<version>.zip`.
+3. **Publish** through your FreeBlackMarket seller account
+   (`~/.forge/fbm.json`): FBM validates, **signs with the platform Ed25519
+   key** (Forge never holds signing keys), and lists the extension in its
+   catalog with immutable version history. Manifest-kind extensions are hosted
+   entirely by the marketplace; for asset kinds you upload the packaged zip
+   anywhere public and paste its address — the signed envelope binds the
+   zip's hash, so the bytes are tamper-evident wherever they live.
+4. **Install**: buyers install under FBM entitlements; the Blackout client
+   verifies signatures against FBM's published keys and renders the declared
+   surfaces (home cards, pinned nav, panels).
+
+Per the ecosystem's consolidation decisions, there is one registry (FBM's
+catalog) and one host (Blackout); Black Mask stays a persona/credential
+manager — the vault-item and privacy-tool templates are how that space is
+served, through the shared registry.
 
 ## Current status
 
 Forge is under active development. The repository currently includes:
 
-- A **Tauri v2 backend** (`src-tauri/`) with IPC commands for project discovery,
-  config read/write/validation, process execution, build orchestration, deploy
+- A **Tauri v2 backend** (`src-tauri/`) with a framework-adapter layer
+  (`backend/frameworks/`) behind IPC commands for project discovery, config
+  read/write/validation, process execution, build orchestration, deploy
   readiness checks, and local state persistence.
+- A **BMC extension studio** (W3): scaffold an extension from eight templates
+  (widget, pinned-nav panel, theme, automation recipe, coalition kit, vault
+  item, privacy tool, blank), validate the shared extension manifest, package
+  with deterministic digests (asset kinds get a reproducible bundle zip), and
+  publish into the FreeBlackMarket plugin registry through your seller
+  account — FBM signs at publish, Forge never holds signing keys. Connection
+  config lives in `~/.forge/fbm.json`; the contract is
+  `docs/contracts/extension-manifest.md` in `Blackmarket-coa/free-black-market`.
 - A **React frontend** (`web/src/`) for project browsing, workspace views,
-  build orchestration, deploy dashboard, config editing, and settings.
+  build orchestration, deploy dashboard, per-framework config editing, and
+  settings.
 - Commercial tier plumbing (Free/Pro/Team) with local license cache and Keygen
   validation hooks.
 - A tag-driven GitHub Actions release workflow for macOS, Linux, and Windows.

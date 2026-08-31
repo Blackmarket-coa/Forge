@@ -2,7 +2,7 @@
 name = "forge"
 version = "0.1.0"
 edition = "2021"
-description = "Turn websites into desktop apps and manage Tauri projects, without writing code"
+description = "Turn websites into desktop, mobile, and web apps — and manage them — without writing code"
 
 [lib]
 name = "forge_lib"
@@ -17,6 +17,8 @@ uuid = { version = "1", features = ["v4"] }
 toml = "0.8"
 url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Extension packaging digests (W3) — already in the lock via tauri-plugin-updater.
+sha2 = "0.10"
 tauri-plugin-updater = "2"
 log = "0.4"
 env_logger = "0.11"
@@ -24,6 +26,7 @@ sentry = { version = "0.34", default-features = false, features = ["backtrace", 
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-opener = "2"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

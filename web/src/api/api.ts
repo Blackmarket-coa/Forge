@@ -1,6 +1,49 @@
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { openUrl } from "@tauri-apps/plugin-opener"
 
+/** Frameworks Forge can generate and manage. */
+export type Framework =
+  | "tauri"
+  | "capacitor"
+  | "electron"
+  | "pwa"
+  | "react-native"
+
+export interface BundleKind {
+  id: string
+  label: string
+  platform: string
+  note?: string
+}
+
+export interface ToolInfo {
+  name: string
+  label: string
+  install_hint: string
+  platform_only?: string
+}
+
+/** Static framework description served by the backend (`get_frameworks`). */
+export interface FrameworkInfo {
+  id: Framework
+  label: string
+  tagline: string
+  platforms: string[]
+  bundle_kinds: BundleKind[]
+  tools: ToolInfo[]
+  config_file: string
+  dev_label: string
+  dev_available: boolean
+}
+
+/** One framework target inside a project. */
+export interface TargetMeta {
+  framework: Framework
+  dir: string
+  version?: string
+  status: string
+}
+
 export interface ProjectMeta {
   id: string
   name: string
@@ -15,6 +58,8 @@ export interface ProjectMeta {
   status: string
   tags: string[]
   role?: string
+  targets: TargetMeta[]
+  source_url?: string
 }
 
 export interface Workspace {
@@ -26,6 +71,7 @@ export interface Workspace {
 
 export interface BuildStep {
   project_id: string
+  framework: Framework
   targets: string[]
   parallel_with_next: boolean
 }
@@ -48,12 +94,31 @@ export interface LicenseStatus {
 export interface BuildRecord {
   id: string
   project_id: string
+  framework: Framework
   targets: string[]
   status: string
   started_at: string
   duration_secs: number
   artifacts: any[]
   log_path: string
+}
+
+/** One tool row from `check_environment`, deduped across frameworks. */
+export interface EnvTool {
+  name: string
+  label: string
+  installed: boolean
+  version: string
+  install_hint: string
+  needed_by: Framework[]
+}
+
+export interface EnvResult {
+  tools: EnvTool[]
+}
+
+export async function getFrameworks(): Promise<FrameworkInfo[]> {
+  return invoke("get_frameworks")
 }
 
 export async function registerProject(path: string): Promise<ProjectMeta> {
@@ -64,40 +129,50 @@ export async function getProjects(
 ): Promise<ProjectMeta[]> {
   return invoke("get_projects", { workspaceId })
 }
-export async function detectTauriStatus(path: string): Promise<any> {
-  return invoke("detect_tauri_status", { path })
+export async function detectProjectStatus(path: string): Promise<any> {
+  return invoke("detect_project_status", { path })
 }
 export async function scanDirectory(path: string): Promise<ProjectMeta[]> {
   return invoke("scan_directory", { path })
 }
-export async function readConfig(projectPath: string): Promise<any> {
-  return invoke("read_config", { projectPath })
+export async function readConfig(
+  projectPath: string,
+  framework: Framework = "tauri"
+): Promise<any> {
+  return invoke("read_config", { projectPath, framework })
 }
 export async function writeConfig(
   projectPath: string,
-  config: any
+  config: any,
+  framework: Framework = "tauri"
 ): Promise<void> {
-  return invoke("write_config", { projectPath, config })
+  return invoke("write_config", { projectPath, framework, config })
 }
 export async function validateConfig(
   projectPath: string,
-  config: any
+  config: any,
+  framework: Framework = "tauri"
 ): Promise<string[]> {
-  return invoke("validate_config", { projectPath, config })
+  return invoke("validate_config", { projectPath, framework, config })
 }
-export async function runDev(projectPath: string): Promise<number> {
-  return invoke("run_dev", { projectPath })
+/** Start a preview/dev run; resolves to the process id used for Stop. */
+export async function runDev(
+  projectPath: string,
+  framework: Framework = "tauri"
+): Promise<string> {
+  return invoke("run_dev", { projectPath, framework })
 }
 export async function runBuild(
   projectPath: string,
-  targets: string[]
+  targets: string[],
+  framework: Framework = "tauri"
 ): Promise<any> {
-  return invoke("run_build", { projectPath, targets })
+  return invoke("run_build", { projectPath, framework, targets })
 }
 export async function killProcess(processId: string): Promise<void> {
   return invoke("kill_process", { processId })
 }
-export async function checkEnvironment(): Promise<any> {
+export async function checkEnvironment(): Promise<EnvResult> {
   return invoke("check_environment")
 }
 
@@ -129,11 +204,14 @@ export interface CreateWebAppArgs {
   width?: number
   height?: number
   identifier?: string
+  /** Which kinds of app to generate; defaults to a Tauri desktop app. */
+  frameworks?: Framework[]
 }
 
 /**
- * Generate a desktop app that wraps a website URL. Requires only a website
- * address and an app name — no Node.js, package manager, or framework.
+ * Generate app(s) that wrap a website URL — one project with a target for
+ * each requested framework. Requires only a website address and an app name —
+ * no Node.js, package manager, or framework tooling at generation time.
  */
 export async function createWebApp(
   args: CreateWebAppArgs
@@ -145,7 +223,17 @@ export async function createWebApp(
     width: args.width,
     height: args.height,
     identifier: args.identifier,
+    frameworks: args.frameworks,
   })
+}
+
+/** Add another kind of app to an existing project (reuses its website). */
+export async function addTarget(
+  projectPath: string,
+  framework: Framework,
+  url?: string
+): Promise<ProjectMeta> {
+  return invoke("add_target", { projectPath, framework, url })
 }
 
 /** A friendly default folder (~/Forge Apps) for saving generated apps. */
@@ -226,4 +314,108 @@ export async function getLicenseStatus(): Promise<LicenseStatus> {
 
 export async function clearLicense(): Promise<LicenseStatus> {
   return invoke("clear_license")
+}
+
+// ---------------------------------------------------------------------------
+// Extensions (W3): scaffold → validate → package → publish → browse.
+// ---------------------------------------------------------------------------
+
+export interface ExtensionDigests {
+  manifestSha256: string
+  /** Hash of the hosted bundle zip (absent for manifest_plugin). */
+  codeSha256?: string
+  entrySha256?: string
+  payloadSha256?: string
+  assetHashes: Record<string, string>
+}
+
+export interface PackageResult {
+  distDir: string
+  digests: ExtensionDigests
+  /** Path of the deterministic bundle zip, for kinds that need hosting. */
+  bundlePath?: string
+  /** True when publishing needs the hosted bundle's web address. */
+  needsBlob: boolean
+  issues: string[]
+}
+
+/** One scaffold template from the backend's registry. */
+export interface ExtensionTemplate {
+  id: string
+  label: string
+  description: string
+  artifactKind: string
+  needsBlob: boolean
+}
+
+export interface PublishOutcome {
+  listingId: string
+  pluginSlug?: string | null
+  pluginVersion?: string | null
+  envelope: unknown
+}
+
+export interface FbmStatus {
+  configured: boolean
+  api_base_url?: string | null
+  seller_token_masked?: string | null
+  /** Storefront publishable key — public by design, shown in full. */
+  publishable_key?: string | null
+}
+
+export async function getExtensionTemplates(): Promise<ExtensionTemplate[]> {
+  return invoke("get_extension_templates")
+}
+
+export async function scaffoldExtension(
+  parentDir: string,
+  name: string,
+  template?: string
+): Promise<string> {
+  return invoke("scaffold_extension", { parentDir, name, template })
+}
+
+export async function validateExtension(
+  projectPath: string
+): Promise<string[]> {
+  return invoke("validate_extension", { projectPath })
+}
+
+export async function packageExtension(
+  projectPath: string
+): Promise<PackageResult> {
+  return invoke("package_extension", { projectPath })
+}
+
+export async function publishExtension(
+  projectPath: string,
+  codeBlobUrl?: string
+): Promise<PublishOutcome> {
+  return invoke("publish_extension", { projectPath, codeBlobUrl })
+}
+
+export async function browsePlugins(category?: string): Promise<{
+  count: number
+  plugins: Array<{
+    slug: string
+    name: string
+    category: string
+    description: string
+    version: string
+    install_count: number
+  }>
+}> {
+  return invoke("browse_plugins", { category })
+}
+
+export async function getFbmStatus(): Promise<FbmStatus> {
+  return invoke("get_fbm_status")
+}
+
+export async function setFbmConfig(
+  apiBaseUrl?: string,
+  sellerToken?: string,
+  publishableKey?: string
+): Promise<FbmStatus> {
+  return invoke("set_fbm_config", { apiBaseUrl, sellerToken, publishableKey })
 }
