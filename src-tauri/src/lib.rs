@@ -52,6 +52,7 @@ pub fn register_commands(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
             backend::ipc::get_build_history,
             backend::ipc::get_deploy_status,
             backend::ipc::scaffold_extension,
+            backend::ipc::get_extension_templates,
             backend::ipc::validate_extension,
             backend::ipc::package_extension,
             backend::ipc::publish_extension,

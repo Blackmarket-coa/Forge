@@ -5,12 +5,14 @@ import { isFeatureAvailable } from "../lib/tier"
 import {
   browsePlugins,
   getDefaultAppDir,
+  getExtensionTemplates,
   getFbmStatus,
   packageExtension,
   publishExtension,
   scaffoldExtension,
   setFbmConfig,
   validateExtension,
+  ExtensionTemplate,
   FbmStatus,
   PackageResult,
   PublishOutcome,
@@ -24,12 +26,34 @@ import { Input } from "./ui/input"
 import { PageHeader } from "./ui/page-header"
 import { Select } from "./ui/select"
 
+/** Shown until the backend's template registry loads (or in browser dev). */
+const FALLBACK_TEMPLATES: ExtensionTemplate[] = [
+  {
+    id: "featured-vendor-widget",
+    label: "Featured Vendor Widget (home card)",
+    description:
+      "A Blackout home-surface card spotlighting promoted vendors — the end-to-end demo path.",
+    artifactKind: "manifest_plugin",
+    needsBlob: false,
+  },
+  {
+    id: "blank",
+    label: "Blank manifest plugin",
+    description: "A minimal manifest to build on.",
+    artifactKind: "manifest_plugin",
+    needsBlob: false,
+  },
+]
+
 /**
  * Extensions (W3): author a BMC extension, package it, and publish it into
  * the FreeBlackMarket registry (build → sign → publish — signing happens on
  * FBM's side at publish). Browsing uses the public registry list route and
  * finally honors the `plugin_browser` tier key; publishing is Pro-gated with
- * its own `extension_publish` key.
+ * its own `extension_publish` key. Asset-carrying kinds (themes, kits, vault
+ * items…) are packaged into a deterministic zip whose public address the
+ * author pastes before publishing; manifest-kind extensions need nothing
+ * hosted at all.
  */
 export default function ExtensionsView() {
   const { tier } = useAppState()
@@ -42,7 +66,10 @@ export default function ExtensionsView() {
 
   const [name, setName] = useState("")
   const [template, setTemplate] = useState("featured-vendor-widget")
+  const [templates, setTemplates] =
+    useState<ExtensionTemplate[]>(FALLBACK_TEMPLATES)
   const [projectPath, setProjectPath] = useState("")
+  const [bundleUrl, setBundleUrl] = useState("")
 
   const [busy, setBusy] = useState<string | null>(null)
   const [issues, setIssues] = useState<string[]>([])
@@ -74,6 +101,13 @@ export default function ExtensionsView() {
 
   useEffect(() => {
     void refreshFbm()
+    void getExtensionTemplates()
+      .then((list) => {
+        if (list.length > 0) setTemplates(list)
+      })
+      .catch(() => {
+        /* keep the fallback list */
+      })
   }, [refreshFbm])
 
   const run = async (label: string, action: () => Promise<void>) => {
@@ -110,6 +144,7 @@ export default function ExtensionsView() {
       setIssues([])
       setPackaged(null)
       setPublished(null)
+      setBundleUrl("")
       enqueueSnackbar(`Created ${path}`, { variant: "success" })
     })
 
@@ -140,7 +175,10 @@ export default function ExtensionsView() {
 
   const onPublish = () =>
     run("publish", async () => {
-      const outcome = await publishExtension(projectPath)
+      const outcome = await publishExtension(
+        projectPath,
+        bundleUrl.trim() || undefined
+      )
       setPublished(outcome)
       enqueueSnackbar(
         outcome.pluginSlug
@@ -225,15 +263,22 @@ export default function ExtensionsView() {
             placeholder="My Vendor Widget"
           />
         </Field>
-        <Field label="Template">
+        <Field
+          label="Template"
+          help={
+            templates.find((t) => t.id === template)?.description ??
+            "Pick what kind of extension to start from."
+          }
+        >
           <Select
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
           >
-            <option value="featured-vendor-widget">
-              Featured Vendor Widget
-            </option>
-            <option value="blank">Blank manifest plugin</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
           </Select>
         </Field>
         <Button onClick={onScaffold} disabled={busy !== null || !name.trim()}>
@@ -273,7 +318,11 @@ export default function ExtensionsView() {
           <Button
             onClick={onPublish}
             disabled={
-              busy !== null || !projectPath || !canPublish || !fbm?.configured
+              busy !== null ||
+              !projectPath ||
+              !canPublish ||
+              !fbm?.configured ||
+              (packaged?.needsBlob === true && !bundleUrl.trim())
             }
           >
             {busy === "publish" ? "Publishing…" : "Publish to registry"}
@@ -297,8 +346,27 @@ export default function ExtensionsView() {
         {packaged && issues.length === 0 && (
           <p>
             Packaged to <code>{packaged.distDir}</code> (manifest{" "}
-            <code>{packaged.digests.manifestSha256.slice(0, 12)}…</code>)
+            <code>{packaged.digests.manifestSha256.slice(0, 12)}…</code>
+            {packaged.bundlePath ? (
+              <>
+                {" "}
+                · bundle <code>{packaged.bundlePath}</code>
+              </>
+            ) : null}
+            )
           </p>
+        )}
+        {packaged?.needsBlob && (
+          <Field
+            label="Bundle web address"
+            help="This kind of extension ships an asset bundle. Upload the packaged .zip anywhere public (your website or a release page) and paste its address — FBM binds its hash into the signed listing, so the bytes can't be tampered with wherever they live."
+          >
+            <Input
+              value={bundleUrl}
+              onChange={(e) => setBundleUrl(e.target.value)}
+              placeholder="https://yoursite.com/downloads/my-theme-0.1.0.zip"
+            />
+          </Field>
         )}
         {published && (
           <Banner tone="success">

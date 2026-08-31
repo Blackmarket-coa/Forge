@@ -322,7 +322,9 @@ export async function clearLicense(): Promise<LicenseStatus> {
 
 export interface ExtensionDigests {
   manifestSha256: string
+  /** Hash of the hosted bundle zip (absent for manifest_plugin). */
   codeSha256?: string
+  entrySha256?: string
   payloadSha256?: string
   assetHashes: Record<string, string>
 }
@@ -330,7 +332,20 @@ export interface ExtensionDigests {
 export interface PackageResult {
   distDir: string
   digests: ExtensionDigests
+  /** Path of the deterministic bundle zip, for kinds that need hosting. */
+  bundlePath?: string
+  /** True when publishing needs the hosted bundle's web address. */
+  needsBlob: boolean
   issues: string[]
+}
+
+/** One scaffold template from the backend's registry. */
+export interface ExtensionTemplate {
+  id: string
+  label: string
+  description: string
+  artifactKind: string
+  needsBlob: boolean
 }
 
 export interface PublishOutcome {
@@ -346,6 +361,10 @@ export interface FbmStatus {
   seller_token_masked?: string | null
   /** Storefront publishable key — public by design, shown in full. */
   publishable_key?: string | null
+}
+
+export async function getExtensionTemplates(): Promise<ExtensionTemplate[]> {
+  return invoke("get_extension_templates")
 }
 
 export async function scaffoldExtension(

@@ -1079,6 +1079,14 @@ pub async fn scaffold_extension(
     Ok(path.display().to_string())
 }
 
+/// The extension template registry — labels, artifact kinds, and whether a
+/// kind needs a hosted bundle — so the UI stays in sync with the backend.
+#[tauri::command]
+pub async fn get_extension_templates(
+) -> Result<Vec<crate::backend::extension_scaffold::TemplateInfo>, String> {
+    Ok(crate::backend::extension_scaffold::templates())
+}
+
 #[tauri::command]
 pub async fn validate_extension(project_path: String) -> Result<Vec<String>, String> {
     let (manifest, _raw) = crate::backend::extension_manifest::load(Path::new(&project_path))?;

@@ -71,6 +71,42 @@ pub fn write_config(config: &FbmConfig) -> Result<(), ForgeError> {
     Ok(())
 }
 
+/// Every artifact kind except `manifest_plugin` ships a hosted bundle, so
+/// publishing it needs the bundle's public address (`code_blob_url`).
+pub fn blob_required(artifact_kind: &str) -> bool {
+    artifact_kind != "manifest_plugin"
+}
+
+/// Pre-flight for asset-carrying kinds: refuse to publish without the hosted
+/// bundle's address + hash, with a plain-language pointer at the fix. Pure,
+/// so the rule is unit-testable without any network or config.
+fn require_bundle_inputs(
+    artifact_kind: &str,
+    code_blob_url: Option<&str>,
+    code_sha256: Option<&str>,
+) -> Result<(), ForgeError> {
+    if !blob_required(artifact_kind) {
+        return Ok(());
+    }
+    if code_blob_url
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .is_none()
+    {
+        return Err(ForgeError::ConfigInvalid(format!(
+            "\"{artifact_kind}\" extensions ship an asset bundle. Upload the \
+             packaged dist/<name>-<version>.zip somewhere public (your website \
+             or a release page) and paste its address before publishing."
+        )));
+    }
+    if code_sha256.is_none() {
+        return Err(ForgeError::ConfigInvalid(
+            "Package the extension first so the bundle hash is computed.".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn mask_token(token: &str) -> String {
     if token.len() <= 10 {
         return "***".to_string();
@@ -157,6 +193,11 @@ pub async fn publish_extension(
     digests: &ExtensionDigests,
     code_blob_url: Option<&str>,
 ) -> Result<PublishOutcome, ForgeError> {
+    require_bundle_inputs(
+        &manifest.artifact_kind,
+        code_blob_url,
+        digests.code_sha256.as_deref(),
+    )?;
     let config = read_config()?;
     let base = require_base_url(&config)?;
     let token = require_token(&config)?;
@@ -323,6 +364,29 @@ mod tests {
         assert_eq!(require_base_url(&config).unwrap(), "https://api.fbm.test");
         assert_eq!(require_token(&config).unwrap(), "tok");
         assert_eq!(require_publishable_key(&config).unwrap(), "pk_test");
+    }
+
+    #[test]
+    fn bundle_inputs_are_required_for_asset_kinds_only() {
+        // manifest_plugin publishes with nothing hosted.
+        assert!(require_bundle_inputs("manifest_plugin", None, None).is_ok());
+
+        // Asset kinds need both the address and the packaged hash.
+        let err = require_bundle_inputs("theme", None, Some("ab".repeat(32).as_str()))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("asset bundle"), "{err}");
+        let err = require_bundle_inputs("theme", Some("   "), Some("hash"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("asset bundle"), "{err}");
+        let err = require_bundle_inputs("vault_item", Some("https://x/kit.zip"), None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Package the extension"), "{err}");
+        assert!(
+            require_bundle_inputs("vault_item", Some("https://x/kit.zip"), Some("hash")).is_ok()
+        );
     }
 
     #[test]
