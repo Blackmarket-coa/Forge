@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -195,13 +197,19 @@ impl ProcessManager {
                     is_stderr: false,
                 });
 
-                let mut child = match Command::new(&step.program)
+                let mut command = Command::new(&step.program);
+                command
                     .args(&step.args)
                     .current_dir(&step.cwd)
                     .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn()
-                {
+                    .stderr(Stdio::piped());
+                // Each step leads its own process group so Stop can reach the
+                // whole tree (dev servers fork children that would otherwise
+                // survive the signal and keep the output pipes open).
+                #[cfg(unix)]
+                command.process_group(0);
+
+                let mut child = match command.spawn() {
                     Ok(child) => child,
                     Err(e) => {
                         sink.output(ProcessOutputPayload {
@@ -216,6 +224,12 @@ impl ProcessManager {
 
                 if let Ok(mut slot) = current_pid.lock() {
                     *slot = Some(child.id());
+                }
+                // Stop may have raced this spawn: kill() saw no pid to signal
+                // and only set the cancel flag, so honor it on the child we
+                // just started instead of letting it run to completion.
+                if cancel.load(Ordering::Relaxed) {
+                    terminate_pid(child.id(), false);
                 }
 
                 let mut readers = Vec::new();
@@ -265,11 +279,13 @@ impl ProcessManager {
                 }
             }
 
-            exit.set(final_code);
+            // Emit the exit event BEFORE releasing the exit slot so every
+            // observer woken by `wait()` finds the event already delivered.
             sink.exit(ProcessExitPayload {
                 id: worker_id,
                 code: final_code,
             });
+            exit.set(final_code);
         });
 
         Ok(())
@@ -336,10 +352,15 @@ impl ProcessManager {
 #[cfg(unix)]
 fn terminate_pid(pid: u32, force: bool) {
     let signal = if force { libc::SIGKILL } else { libc::SIGTERM };
-    // SAFETY: sending a signal to a pid is a simple libc call; an
-    // invalid/exited pid just returns an error we ignore.
+    // SAFETY: sending a signal is a simple libc call; an invalid/exited
+    // pid/group just returns an error. The child leads its own process group
+    // (see `process_group(0)` at spawn), so signal the group to reach its
+    // whole tree, falling back to the single pid for anything spawned
+    // outside a fresh group.
     unsafe {
-        libc::kill(pid as libc::pid_t, signal);
+        if libc::killpg(pid as libc::pid_t, signal) != 0 {
+            libc::kill(pid as libc::pid_t, signal);
+        }
     }
 }
 
