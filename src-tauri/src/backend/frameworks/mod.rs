@@ -15,6 +15,10 @@
 //! detection falls back to probing marker files for projects created outside
 //! Forge.
 
+pub mod capacitor;
+pub mod electron;
+pub mod pwa;
+pub mod react_native;
 pub mod tauri_fw;
 
 use std::path::{Path, PathBuf};
@@ -306,19 +310,16 @@ pub trait FrameworkAdapter: Sync {
 pub fn adapter(framework: Framework) -> &'static dyn FrameworkAdapter {
     match framework {
         Framework::Tauri => &tauri_fw::TauriAdapter,
-        // The remaining adapters are registered as they are implemented.
-        _ => &tauri_fw::TauriAdapter,
+        Framework::Capacitor => &capacitor::CapacitorAdapter,
+        Framework::Electron => &electron::ElectronAdapter,
+        Framework::Pwa => &pwa::PwaAdapter,
+        Framework::ReactNative => &react_native::ReactNativeAdapter,
     }
 }
 
 /// All adapters, in the order frameworks are shown to the user.
 pub fn adapters() -> Vec<&'static dyn FrameworkAdapter> {
-    registered_frameworks().into_iter().map(adapter).collect()
-}
-
-/// Frameworks that currently have a real adapter behind [`adapter`].
-pub fn registered_frameworks() -> Vec<Framework> {
-    vec![Framework::Tauri]
+    Framework::ALL.into_iter().map(adapter).collect()
 }
 
 /// Whether an app identifier looks like reverse-domain form
@@ -720,6 +721,52 @@ mod tests {
     fn scaffold_project_requires_a_framework() {
         let dir = tempfile::tempdir().unwrap();
         assert!(scaffold_project(dir.path(), &opts(), &[]).is_err());
+    }
+
+    #[test]
+    fn scaffold_all_frameworks_and_detect_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = scaffold_project(dir.path(), &opts(), &Framework::ALL).unwrap();
+
+        let status = crate::backend::project_manager::detect_project_status(&project).unwrap();
+        assert_eq!(status.targets.len(), Framework::ALL.len());
+        for fw in Framework::ALL {
+            let target = status
+                .targets
+                .iter()
+                .find(|t| t.framework == fw.id())
+                .unwrap_or_else(|| panic!("missing target for {}", fw.id()));
+            assert_eq!(target.status, "ready", "{} not ready", fw.id());
+            assert_eq!(target.config_issues, Vec::<String>::new());
+        }
+        assert_eq!(status.status, "ready");
+        assert_eq!(status.name.as_deref(), Some("My Store"));
+        assert_eq!(status.source_url.as_deref(), Some("https://mystore.com/"));
+
+        // The README covers every chosen framework.
+        let readme = std::fs::read_to_string(project.join("README.md")).unwrap();
+        for fw in Framework::ALL {
+            assert!(
+                readme.contains(adapter(fw).info().label),
+                "README missing section for {}",
+                fw.id()
+            );
+        }
+    }
+
+    #[test]
+    fn add_target_extends_an_existing_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = scaffold_project(dir.path(), &opts(), &[Framework::Tauri]).unwrap();
+
+        add_target_to_project(&project, Framework::Pwa, &opts()).unwrap();
+
+        let manifest = read_manifest(&project).unwrap().unwrap();
+        assert_eq!(manifest.targets.len(), 2);
+        assert!(manifest.targets.iter().any(|t| t.framework == "pwa"));
+
+        let status = crate::backend::project_manager::detect_project_status(&project).unwrap();
+        assert_eq!(status.targets.len(), 2);
     }
 
     #[test]

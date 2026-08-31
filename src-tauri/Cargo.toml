@@ -24,6 +24,7 @@ sentry = { version = "0.34", default-features = false, features = ["backtrace", 
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-opener = "2"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
