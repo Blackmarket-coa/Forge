@@ -2,7 +2,38 @@
 
 ## Unreleased
 
+### Added
+- Multi-framework app suite: the "Turn your website into an app" flow can now
+  generate **Capacitor (iPhone & Android)**, **Electron (desktop)**,
+  **PWA (install from the browser)**, and **React Native + Expo (mobile)**
+  targets alongside the original Tauri desktop app. One project holds any
+  combination of app types (recorded in a `forge.project.json` manifest), and
+  **Add another app type** extends an existing project in place.
+- A framework-adapter layer in the backend (`backend/frameworks/`) that powers
+  generation, detection (including projects created outside Forge), preview and
+  build command sequences, artifact discovery, per-framework config editing
+  with validation, environment tool checks, and the deploy readiness matrix.
+- Framework-aware UI: an app-type picker in the creation wizard, per-target
+  tabs with framework-specific build outputs (and honest tooling notes) in the
+  project view, framework badges on project cards and artifacts, a deploy
+  matrix with one row per app type, and an environment screen that says which
+  app types need each tool.
+- The PWA "build" packages an uploadable web-app kit (manifest, service
+  worker, icons, paste-in snippet) as a zip with no external toolchain.
+
+### Changed
+- Persisted state schema bumped to v2: projects carry framework `targets`, and
+  build history/presets record a `framework` (older entries migrate as Tauri).
+- `run_dev`/`run_build` execute adapter-defined command sequences (e.g.
+  `npm install` → `npx cap sync android` → Gradle) under one process id, with
+  each step echoed to the activity terminal.
+
 ### Fixed
+- Stopping a running preview/build actually works now: the process manager no
+  longer holds the child-process lock while waiting for exit (which made
+  `kill` block until the process ended on its own), and finished process ids
+  can be reused, so building the same target twice no longer fails with
+  "process already running".
 - Docs: corrected `DEPLOYMENT.md`'s local dev instructions (JS deps live in
   `web/`, not the repo root), filled in the README's updater URL placeholder,
   and synced `package.json`/`Cargo.toml` descriptions with the product's
