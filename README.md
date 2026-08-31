@@ -43,6 +43,36 @@ by a `forge.project.json` manifest. Each target wraps your URL directly — see
 `src-tauri/src/backend/frameworks/` for the generators. Default app icons are
 included so projects build out of the box; you can replace them later.
 
+## Extensions for the BMC ecosystem
+
+Forge is also the **authoring tool for BMC ecosystem extensions** — the
+modules users create and sell on the FreeBlackMarket marketplace and install
+into the Blackout host. The pipeline (the shared contract is
+`docs/contracts/extension-manifest.md` in `Blackmarket-coa/free-black-market`):
+
+1. **Create** in Forge's Extensions view from a template: Featured Vendor
+   Widget or a pinned-nav panel (pure manifest — nothing to host), or an
+   asset-carrying kind — theme, automation recipe, coalition kit, vault item,
+   privacy tool.
+2. **Validate & package**: Forge mirrors the shared manifest schema in Rust,
+   checks it locally, and computes deterministic digests. Asset-carrying kinds
+   get a reproducible `dist/<name>-<version>.zip`.
+3. **Publish** through your FreeBlackMarket seller account
+   (`~/.forge/fbm.json`): FBM validates, **signs with the platform Ed25519
+   key** (Forge never holds signing keys), and lists the extension in its
+   catalog with immutable version history. Manifest-kind extensions are hosted
+   entirely by the marketplace; for asset kinds you upload the packaged zip
+   anywhere public and paste its address — the signed envelope binds the
+   zip's hash, so the bytes are tamper-evident wherever they live.
+4. **Install**: buyers install under FBM entitlements; the Blackout client
+   verifies signatures against FBM's published keys and renders the declared
+   surfaces (home cards, pinned nav, panels).
+
+Per the ecosystem's consolidation decisions, there is one registry (FBM's
+catalog) and one host (Blackout); Black Mask stays a persona/credential
+manager — the vault-item and privacy-tool templates are how that space is
+served, through the shared registry.
+
 ## Current status
 
 Forge is under active development. The repository currently includes:
@@ -51,13 +81,14 @@ Forge is under active development. The repository currently includes:
   (`backend/frameworks/`) behind IPC commands for project discovery, config
   read/write/validation, process execution, build orchestration, deploy
   readiness checks, and local state persistence.
-- A **BMC extension studio** (W3): scaffold an extension from a template
-  (Featured Vendor Widget or blank), validate the shared extension manifest,
-  package with deterministic digests, and publish into the FreeBlackMarket
-  plugin registry through your seller account — FBM signs at publish, Forge
-  never holds signing keys. Connection config lives in `~/.forge/fbm.json`;
-  the contract is `docs/contracts/extension-manifest.md` in
-  `Blackmarket-coa/free-black-market`.
+- A **BMC extension studio** (W3): scaffold an extension from eight templates
+  (widget, pinned-nav panel, theme, automation recipe, coalition kit, vault
+  item, privacy tool, blank), validate the shared extension manifest, package
+  with deterministic digests (asset kinds get a reproducible bundle zip), and
+  publish into the FreeBlackMarket plugin registry through your seller
+  account — FBM signs at publish, Forge never holds signing keys. Connection
+  config lives in `~/.forge/fbm.json`; the contract is
+  `docs/contracts/extension-manifest.md` in `Blackmarket-coa/free-black-market`.
 - A **React frontend** (`web/src/`) for project browsing, workspace views,
   build orchestration, deploy dashboard, per-framework config editing, and
   settings.

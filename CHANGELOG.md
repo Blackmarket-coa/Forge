@@ -35,6 +35,14 @@
 - The deploy dashboard nav is renamed "Release readiness" (real publishing
   now lives in Extensions); `web/.env` carries `REACT_APP_VERSION` and
   `scripts/check-version-sync.sh` now checks all three version sources.
+- Template expansion: six more scaffold templates covering the Blackout-hosted
+  artifact kinds (pinned-nav panel, theme, automation recipe, coalition kit,
+  vault item, privacy tool), a backend-driven template registry
+  (`get_extension_templates`), and hosted-bundle packaging — asset-carrying
+  kinds produce a deterministic `dist/<name>-<version>.zip` whose SHA-256 is
+  bound into FBM's signed envelope; the Extensions view collects the bundle's
+  public address before publishing (manifest-kind extensions still need
+  nothing hosted).
 
 ### Changed
 - Persisted state schema bumped to v2: projects carry framework `targets`, and

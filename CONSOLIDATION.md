@@ -11,8 +11,9 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
   Ed25519 `marketplace-signing`, `digital-product` delivery, and entitlements already exist. The
   remaining platform gap (hook registry + semver handling) closes on the FBM side in workstream
   W3; Forge's side of W3 is the shared extension manifest and the build → sign → publish flow.
-- What exists today is real but scoped: a Tauri v2 project manager (now 37 IPC commands), the
-  "website → app" scaffolding flow, and Keygen licensing (still pointed at the demo account).
+- What exists today is real but scoped: a Tauri v2 project manager (now 40 IPC commands), the
+  multi-framework "website → app" scaffolding flow (Tauri, Capacitor, Electron, PWA,
+  React Native/Expo), and Keygen licensing (still pointed at the demo account).
   ~~There is no extension/SDK/registry code here yet~~ **W3 landed (2026-08-29)**: the shared
   extension manifest mirror + semver (`backend/extension_manifest.rs`, `backend/semver.rs` —
   test vectors shared with FBM's `compat.unit.spec.ts`), the extension scaffolder with the
@@ -21,6 +22,13 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
   `free-black-market/docs/contracts/extension-manifest.md`), and the Extensions view
   (scaffold → validate → package → publish → browse). Config lives in `~/.forge/fbm.json`
   (token masked everywhere); everything fails closed with a Settings pointer until configured.
+  **Template expansion (2026-08-31)**: the scaffold registry now covers eight templates across
+  the Blackout-hosted artifact kinds (pinned-nav panel, theme, automation recipe, coalition kit,
+  vault item, privacy tool alongside the widget + blank), and asset-carrying kinds package a
+  deterministic zip whose hash rides `code_blob_sha256` — the author hosts the zip, FBM hosts
+  and signs everything else. Per D4/D6, the vault-item/privacy-tool templates are how the
+  Black Mask-adjacent space is served: through the shared registry, never a blackmask-hosted
+  module system.
 
 ## Queued fixes
 
