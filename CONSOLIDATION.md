@@ -13,7 +13,8 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
   W3; Forge's side of W3 is the shared extension manifest and the build → sign → publish flow.
 - What exists today is real but scoped: a Tauri v2 project manager (now 40 IPC commands), the
   multi-framework "website → app" scaffolding flow (Tauri, Capacitor, Electron, PWA,
-  React Native/Expo), and Keygen licensing (still pointed at the demo account).
+  React Native/Expo), and Keygen licensing (account id now compiled in from `KEYGEN_ACCOUNT_ID`; no build
+  has shipped with a real one yet).
   ~~There is no extension/SDK/registry code here yet~~ **W3 landed (2026-08-29)**: the shared
   extension manifest mirror + semver (`backend/extension_manifest.rs`, `backend/semver.rs` —
   test vectors shared with FBM's `compat.unit.spec.ts`), the extension scaffolder with the
@@ -38,5 +39,6 @@ verdicts, decisions, and the ordered roadmap — is `docs/REPO_CONSOLIDATION_REV
   key, configured next to the seller token); publishing has its own `extension_publish` Pro key.
 - Stack modernization (React 17/CRA/TS 4.4 → React 18/Vite/TS 5), already recommended by
   `PRODUCTION_READINESS.md`, is queued behind the W3 MVP.
-- Set a real `KEYGEN_ACCOUNT_ID` before any licensing-dependent release; validation always
-  returns invalid on the demo account (see `src-tauri/src/backend/config.rs`).
+- Set the `KEYGEN_ACCOUNT_ID` repository secret before any licensing-dependent release; it is
+  baked in at compile time (`src-tauri/src/backend/license.rs`), and a build without it reports
+  "licensing not configured" instead of validating keys.

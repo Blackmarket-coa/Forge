@@ -1107,6 +1107,8 @@ pub async fn publish_extension(
     project_path: String,
     code_blob_url: Option<String>,
 ) -> Result<crate::backend::fbm_client::PublishOutcome, String> {
+    // Same Pro gate as the UI (`extension_publish` in web/src/lib/tier.ts).
+    crate::backend::tier::require_feature("extension_publish")?;
     // Always package first so the digests + stamped manifest are fresh, and
     // refuse to publish anything that fails validation.
     let package = crate::backend::extension_package::package_extension(Path::new(&project_path))?;
@@ -1129,6 +1131,8 @@ pub async fn publish_extension(
 
 #[tauri::command]
 pub async fn browse_plugins(category: Option<String>) -> Result<serde_json::Value, String> {
+    // Same Pro gate as the UI (`plugin_browser` in web/src/lib/tier.ts).
+    crate::backend::tier::require_feature("plugin_browser")?;
     crate::backend::fbm_client::browse_plugins(category.as_deref())
         .await
         .map_err(String::from)

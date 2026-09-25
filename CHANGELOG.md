@@ -44,6 +44,22 @@
   public address before publishing (manifest-kind extensions still need
   nothing hosted).
 
+### Fixed (licensing)
+- The Keygen account id is now baked in at compile time
+  (`option_env!("KEYGEN_ACCOUNT_ID")`), and `release.yml` passes it from the
+  `KEYGEN_ACCOUNT_ID` repository secret. Previously it was read from the end
+  user's runtime environment and fell back to `demo-account`, so shipped
+  binaries could never unlock Pro/Team. Debug builds keep a runtime override.
+- A build without an account id now reports "Licensing is not configured in
+  this build" instead of silently validating against the demo account and
+  calling every key invalid; the license gate shows that message.
+- `publish_extension` and `browse_plugins` now enforce the same Pro gates as
+  the UI (`extension_publish`, `plugin_browser`) in the backend, using the
+  cached license status (`backend/tier.rs`, mirroring `web/src/lib/tier.ts`).
+- Docs no longer claim a release, signed installers, or a working updater
+  exist: no tag or GitHub Release has been published and `release.yml` has
+  never run.
+
 ### Changed
 - Persisted state schema bumped to v2: projects carry framework `targets`, and
   build history/presets record a `framework` (older entries migrate as Tauri).

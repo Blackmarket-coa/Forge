@@ -3,8 +3,10 @@
 This repository is the Forge desktop app: a Tauri v2 (Rust) backend in `src-tauri/`
 and a React + TypeScript frontend in `web/`. The upstream Tilt Go codebase has been
 removed; this document is retained as a **historical record** of the fork/rebuild
-execution order. All phases below are complete — see `CHANGELOG.md` and `README.md`
-for the current feature set.
+execution order. Phases 0–3 are checked off below; Phase 4 (launch) is **not** — no
+release has been cut yet (no `v*` tags, no GitHub Releases, and
+`.github/workflows/release.yml` has never run). See `CHANGELOG.md` and
+`README.md` for the current feature set.
 
 ## Repository Readiness Gate (before Phase 0) — satisfied
 
@@ -102,9 +104,15 @@ Primary deliverables:
 - final visual polish and public launch checklist
 
 ### Exit criteria
-- [x] Free tier binaries released.
-- [x] Pro gating validated with online/offline behavior.
-- [x] Auto-update flow tested with version bump.
+- [ ] Free tier binaries released. (No tag or GitHub Release exists yet;
+      `release.yml` has never run.)
+- [ ] Pro gating validated with online/offline behavior. (Gating and the offline
+      cache exist, and the IPC commands now enforce Pro for extension publishing
+      and plugin browsing, but no build has yet shipped with a real
+      `KEYGEN_ACCOUNT_ID`, so online validation has not been exercised.)
+- [ ] Auto-update flow tested with version bump. (The updater endpoint
+      `releases/latest/download/latest.json` resolves to nothing until a
+      release is published.)
 
 ## Risk Register (recommended)
 
