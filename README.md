@@ -93,8 +93,10 @@ Forge is under active development. The repository currently includes:
   build orchestration, deploy dashboard, per-framework config editing, and
   settings.
 - Commercial tier plumbing (Free/Pro/Team) with local license cache and Keygen
-  validation hooks.
-- A tag-driven GitHub Actions release workflow for macOS, Linux, and Windows.
+  validation (the Keygen account id is compiled in; see **License/tier
+  behavior**).
+- A tag-driven GitHub Actions release workflow for macOS, Linux, and Windows
+  (not yet run — no release has been published).
 
 ## Repository layout
 
@@ -221,20 +223,30 @@ cargo test
 ## License/tier behavior (current)
 
 - Free tier limits project count and gates selected premium features.
-- Pro/Team unlock gated feature surfaces.
+- Pro/Team unlock gated feature surfaces. Extension publishing and plugin
+  browsing are also enforced by the backend IPC commands (`publish_extension`,
+  `browse_plugins`) using the cached license status, via
+  `src-tauri/src/backend/tier.rs`, which mirrors `web/src/lib/tier.ts`.
+- License keys are validated against the Keygen account compiled into the
+  binary from `KEYGEN_ACCOUNT_ID` at build time. A build without it reports
+  "Licensing is not configured in this build" rather than "invalid key".
+  Debug builds also accept a runtime `KEYGEN_ACCOUNT_ID` override.
 - License status is persisted in `~/.forge/license.json` and app state in
   `~/.forge/forge.json`.
 
 ## Releases
 
 Create and push a semantic tag like `v0.1.0` to trigger the cross-platform
-release workflow. Releases are created as **drafts** by default.
+release workflow. Releases are created as **drafts** by default. No release has
+been cut yet (no tags, and the workflow has never run). The workflow needs the
+`KEYGEN_ACCOUNT_ID` repository secret so shipped builds can validate licenses.
 
 ### Auto-updater
 
-Forge ships with the Tauri updater. Built apps check
+Forge includes the Tauri updater. From **Settings → Updates**, built apps check
 `https://github.com/blackmarket-coa/Forge/releases/latest/download/latest.json`
-and can self-update from signed releases (see **Settings → Updates**).
+and can self-update from signed releases. Until the first release is
+published, that URL resolves to nothing and the check fails.
 
 Updater artifacts must be signed. Generate a keypair once:
 

@@ -13,15 +13,25 @@
 
 Copy `.env.example` to `.env` and fill in the values before building a
 production release.  The variables are also documented in `.env.example`.
+Forge does not load `.env` itself — export the values into the environment of
+the build (or of the running app, where noted).
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `KEYGEN_ACCOUNT_ID` | Production | `demo-account` | Keygen account for license validation |
+| `KEYGEN_ACCOUNT_ID` | Production (**build time**) | _(none — licensing not configured)_ | Keygen account for license validation; baked into the binary at compile time |
 | `SENTRY_DSN` | Recommended | _(none — Sentry disabled)_ | Sentry project DSN for crash reporting |
 | `RUST_LOG` | Optional | `warn` | Log level filter (`forge=info` recommended) |
 
-Forge validates these at startup and emits `warn`-level log lines for any
-missing or placeholder values.
+`SENTRY_DSN` and `RUST_LOG` are read when the app starts.
+`KEYGEN_ACCOUNT_ID` is read when the Rust backend is **compiled**
+(`option_env!` in `src-tauri/src/backend/license.rs`): a binary built without
+it cannot validate license keys and reports "Licensing is not configured in
+this build" instead of treating keys as invalid. Debug builds (`cargo tauri
+dev`) also honor a runtime `KEYGEN_ACCOUNT_ID` override for development;
+release builds ignore it.
+
+Forge checks these at startup and emits `warn`-level log lines for any
+missing values (including a build without licensing configured).
 
 ## Local development
 
@@ -35,6 +45,10 @@ cargo tauri dev
 
 ## Building a release
 
+> **Status:** no release has been published yet — there are no `v*` tags or
+> GitHub Releases, and `release.yml` has never run. The steps below describe
+> the intended process; the first tagged release will be its first real test.
+
 ### 1. Bump the version
 
 Version is defined in two places — keep them in sync:
@@ -45,7 +59,11 @@ Version is defined in two places — keep them in sync:
 ### 2. Tag and push
 
 The GitHub Actions release workflow (`/.github/workflows/release.yml`) triggers
-on `v*` tags and builds signed installers for macOS, Linux, and Windows.
+on `v*` tags and builds installers for macOS, Linux, and Windows. The updater
+artifacts and `latest.json` are signed with `TAURI_SIGNING_PRIVATE_KEY`; the
+installers themselves are **not** code-signed or notarized (no Apple/Windows
+signing identity is configured), so macOS Gatekeeper and Windows SmartScreen
+will warn on first launch.
 
 ```sh
 git tag v0.2.0
@@ -63,17 +81,19 @@ The Tauri auto-updater polls:
 https://github.com/blackmarket-coa/forge/releases/latest/download/latest.json
 ```
 
-`tauri-action` generates and uploads this file automatically when you publish
-the draft release.  No manual step is needed.
+`tauri-action` generates and uploads this file to the draft release. The
+`latest/download` URL only resolves once a non-draft release is published —
+until then (i.e. today) the updater finds nothing.
 
 ## Auto-updater
 
-`tauri-plugin-updater` is bundled into every build.  On startup it checks the
-endpoint above.  Users are prompted to install the update in-app.
+`tauri-plugin-updater` is bundled into every build.  It does not check on
+startup: users run **Settings → Updates → Check for updates**, which queries the
+endpoint above and offers to download and install a newer signed build.
 
-To test the updater locally, set a lower `version` in `tauri.conf.json` and run
-`cargo tauri dev` — the updater will consider the running version outdated and
-offer to upgrade.
+Because no release has been published, the endpoint currently returns nothing
+and the check fails. Once a release exists, you can test the flow by running a
+build with a lower `version` in `tauri.conf.json` and checking for updates.
 
 ## Rollback procedure
 
@@ -97,8 +117,8 @@ If a bad release was already published:
 
 | Pipeline | Trigger | Jobs |
 |----------|---------|------|
-| GitHub Actions `ci.yml` | Push to any branch / PR | Version-sync check; frontend lint, types, tests (+coverage artifact); backend `cargo fmt`/`clippy`/`test` |
-| GitHub Actions `release.yml` | Push `v*` tag | Cross-platform signed installers + `latest.json`, draft release |
+| GitHub Actions `ci.yml` | Push to `master` / any PR | Version-sync check; frontend lint, types, tests (+coverage artifact); backend `cargo fmt`/`clippy`/`test` |
+| GitHub Actions `release.yml` | Push `v*` tag | Cross-platform installers + signed updater artifacts / `latest.json`, draft release (never run yet) |
 
 The `version-sync` job runs `scripts/check-version-sync.sh`, which fails the
 build if `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` disagree on the
@@ -109,7 +129,8 @@ version — so the manual two-file bump in step 1 above is enforced by CI.
 | Secret | Where | Notes |
 |--------|-------|-------|
 | `GITHUB_TOKEN` | GitHub Actions (automatic) | Used by `tauri-action` to create releases |
-| `KEYGEN_ACCOUNT_ID` | CI environment / machine `.env` | License validation account |
+| `KEYGEN_ACCOUNT_ID` | Repository secret, passed to the build by `release.yml` | License validation account (compiled into the binary) |
+| `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Repository secrets | Sign updater artifacts and `latest.json` |
 | `SENTRY_DSN` | CI environment / machine `.env` | Crash reporting |
 
 Never commit `.env` files.  `.env` is listed in `.gitignore`.
@@ -119,7 +140,7 @@ Never commit `.env` files.  `.env` is listed in `.gitignore`.
 - [ ] Version bumped in `Cargo.toml` and `tauri.conf.json` (`sh scripts/check-version-sync.sh` passes)
 - [ ] `CHANGELOG.md` updated
 - [ ] All CI checks green on the release commit
-- [ ] `KEYGEN_ACCOUNT_ID` set to production account in build environment
+- [ ] `KEYGEN_ACCOUNT_ID` repository secret set to the production account (it is compiled in — a release built without it cannot unlock Pro/Team)
 - [ ] `SENTRY_DSN` set to production project DSN in build environment
 - [ ] Draft release reviewed and release notes edited
 - [ ] Release published (triggers `latest.json` upload for auto-updater)
