@@ -40,6 +40,10 @@ jobs:
           # key lives in src-tauri/tauri.conf.json (plugins.updater.pubkey).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Baked into the binary at compile time (option_env! in
+          # src-tauri/src/backend/license.rs). Without it the shipped app
+          # reports "licensing not configured" and cannot unlock Pro/Team.
+          KEYGEN_ACCOUNT_ID: ${{ secrets.KEYGEN_ACCOUNT_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Forge ${{ github.ref_name }}

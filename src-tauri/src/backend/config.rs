@@ -14,23 +14,30 @@ struct EnvCheck {
 }
 
 pub fn validate_startup_env() {
-    let checks = [
-        EnvCheck {
-            var: "KEYGEN_ACCOUNT_ID",
-            required: false,
-            sentinel: Some("demo-account"),
-            hint: "license validation will use the Keygen demo sandbox and always return invalid; \
-                   set KEYGEN_ACCOUNT_ID to your real account ID in production",
-        },
-        EnvCheck {
-            var: "SENTRY_DSN",
-            required: false,
-            sentinel: None,
-            hint: "crash reporting is disabled; set SENTRY_DSN to enable Sentry in production",
-        },
-    ];
+    let checks = [EnvCheck {
+        var: "SENTRY_DSN",
+        required: false,
+        sentinel: None,
+        hint: "crash reporting is disabled; set SENTRY_DSN to enable Sentry in production",
+    }];
 
     let mut all_ok = true;
+
+    // The Keygen account id is baked in at compile time (with a debug-only
+    // runtime override), so check the effective value rather than the env.
+    match crate::backend::license::keygen_account_id() {
+        Some((_, crate::backend::license::AccountIdSource::RuntimeOverride)) => {
+            info!("config: using runtime KEYGEN_ACCOUNT_ID override (debug build)");
+        }
+        Some((_, crate::backend::license::AccountIdSource::Build)) => {}
+        None => {
+            warn!(
+                "config: licensing is not configured in this build — Pro/Team license keys \
+                 cannot be validated; build with KEYGEN_ACCOUNT_ID set to enable licensing"
+            );
+            all_ok = false;
+        }
+    }
 
     for check in &checks {
         match std::env::var(check.var) {

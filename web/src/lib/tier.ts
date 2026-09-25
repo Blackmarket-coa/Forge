@@ -6,6 +6,8 @@ export const LIMITS = {
   team: { maxProjects: Infinity },
 }
 
+// Keep this list in sync with src-tauri/src/backend/tier.rs, which enforces
+// the same gates in the IPC commands (publish_extension, browse_plugins).
 export function isFeatureAvailable(feature: string, tier: Tier): boolean {
   const proFeatures = [
     "workspaces",

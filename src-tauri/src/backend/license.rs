@@ -8,6 +8,63 @@ use serde_json::{json, Value};
 const KEYGEN_API: &str = "https://api.keygen.sh/v1";
 const OFFLINE_GRACE_SECS: u64 = 7 * 24 * 60 * 60;
 
+/// Keygen account id baked in at compile time. Release builds get it from the
+/// `KEYGEN_ACCOUNT_ID` environment variable of the build (see
+/// `.github/workflows/release.yml`); a build made without it cannot validate
+/// licenses at all.
+const BUILD_KEYGEN_ACCOUNT_ID: Option<&str> = option_env!("KEYGEN_ACCOUNT_ID");
+
+/// Error returned instead of an "invalid key" result when this build has no
+/// Keygen account id, so users are not told a good key is bad.
+pub const LICENSING_NOT_CONFIGURED: &str =
+    "Licensing is not configured in this build of Forge, so license keys cannot be \
+     validated. Official release builds include it; builds from source need \
+     KEYGEN_ACCOUNT_ID set at compile time.";
+
+/// Where the effective Keygen account id came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountIdSource {
+    /// Runtime `KEYGEN_ACCOUNT_ID` override (debug builds only).
+    RuntimeOverride,
+    /// Baked in at compile time.
+    Build,
+}
+
+fn normalize_account_id(raw: Option<&str>) -> Option<String> {
+    let trimmed = raw?.trim();
+    // "demo-account" was the old placeholder fallback; it never validates.
+    if trimmed.is_empty() || trimmed == "demo-account" {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+fn resolve_account_id(
+    runtime: Option<&str>,
+    build: Option<&str>,
+    allow_runtime_override: bool,
+) -> Option<(String, AccountIdSource)> {
+    if allow_runtime_override {
+        if let Some(id) = normalize_account_id(runtime) {
+            return Some((id, AccountIdSource::RuntimeOverride));
+        }
+    }
+    normalize_account_id(build).map(|id| (id, AccountIdSource::Build))
+}
+
+/// The Keygen account id this binary validates against, or `None` when
+/// licensing is not configured. The runtime `KEYGEN_ACCOUNT_ID` override is
+/// honored only in debug builds so a shipped binary cannot be pointed at a
+/// different Keygen account.
+pub fn keygen_account_id() -> Option<(String, AccountIdSource)> {
+    let runtime = std::env::var("KEYGEN_ACCOUNT_ID").ok();
+    resolve_account_id(
+        runtime.as_deref(),
+        BUILD_KEYGEN_ACCOUNT_ID,
+        cfg!(debug_assertions),
+    )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LicenseStatus {
     pub tier: String,
@@ -161,8 +218,9 @@ fn parse_validation_response(value: &Value) -> (bool, String, Option<String>) {
 }
 
 async fn validate_key_remote(key: &str) -> Result<CachedValidation, String> {
-    let account_id =
-        std::env::var("KEYGEN_ACCOUNT_ID").unwrap_or_else(|_| "demo-account".to_string());
+    let Some((account_id, _)) = keygen_account_id() else {
+        return Err(LICENSING_NOT_CONFIGURED.to_string());
+    };
     let endpoint = format!("{KEYGEN_API}/accounts/{account_id}/licenses/actions/validate-key");
 
     let client = reqwest::Client::new();
@@ -250,6 +308,37 @@ pub fn clear_license() -> Result<LicenseStatus, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn account_id_missing_or_placeholder_is_not_configured() {
+        assert_eq!(resolve_account_id(None, None, true), None);
+        assert_eq!(resolve_account_id(Some(""), Some("  "), true), None);
+        assert_eq!(
+            resolve_account_id(Some("demo-account"), Some("demo-account"), true),
+            None
+        );
+    }
+
+    #[test]
+    fn account_id_uses_build_value() {
+        assert_eq!(
+            resolve_account_id(None, Some("acct-123"), false),
+            Some(("acct-123".to_string(), AccountIdSource::Build))
+        );
+    }
+
+    #[test]
+    fn runtime_override_only_when_allowed() {
+        assert_eq!(
+            resolve_account_id(Some("dev-acct"), Some("acct-123"), true),
+            Some(("dev-acct".to_string(), AccountIdSource::RuntimeOverride))
+        );
+        assert_eq!(
+            resolve_account_id(Some("dev-acct"), Some("acct-123"), false),
+            Some(("acct-123".to_string(), AccountIdSource::Build))
+        );
+        assert_eq!(resolve_account_id(Some("dev-acct"), None, false), None);
+    }
 
     #[test]
     fn mask_key_hides_middle() {

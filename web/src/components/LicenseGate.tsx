@@ -40,10 +40,15 @@ export default function LicenseGate({
         { variant: status.valid ? "success" : "error" }
       )
     } catch (error) {
-      enqueueSnackbar(
-        error instanceof Error ? error.message : "Validation failed",
-        { variant: "error" }
-      )
+      // Tauri commands reject with a plain string (e.g. "Licensing is not
+      // configured in this build…"), so show it rather than a generic message.
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string" && error
+          ? error
+          : "Validation failed"
+      enqueueSnackbar(message, { variant: "error" })
     } finally {
       setLoading(false)
     }

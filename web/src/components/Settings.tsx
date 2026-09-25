@@ -35,7 +35,11 @@ export default function Settings() {
       if (status.valid) setDraftKey("")
     } catch (error) {
       enqueueSnackbar(
-        error instanceof Error ? error.message : "Activation failed",
+        error instanceof Error
+          ? error.message
+          : typeof error === "string" && error
+          ? error
+          : "Activation failed",
         { variant: "error" }
       )
     } finally {
